@@ -9,6 +9,7 @@ import { runMode } from './commands/mode.js';
 import { runBenchmarkCommand } from './commands/benchmark.js';
 import { runRollback } from './commands/rollback.js';
 import { runPolicies } from './commands/policies.js';
+import { runDashboard } from './commands/dashboard.js';
 
 const program = new Command();
 
@@ -60,6 +61,11 @@ program.command('policies')
   .description('Evaluate optimization policies against current telemetry')
   .option('--json', 'Output as JSON')
   .action(wrap(runPolicies));
+
+program.command('dashboard')
+  .description('Start local web dashboard for telemetry visualization')
+  .option('--port <port>', 'HTTP port', '3141')
+  .action(wrap(runDashboard));
 
 program.command('rollback')
   .description('Roll back to observe mode, disabling all active optimizations')

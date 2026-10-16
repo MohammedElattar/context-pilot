@@ -8,7 +8,7 @@ ContextPilot orchestrates existing optimization tools (primarily Caveman), provi
 
 ## Current State (Phase 5)
 
-Working CLI with 9 commands:
+Working CLI with 10 commands:
 - `contextpilot doctor` — environment inspection (Claude Code, Caveman, hooks, plugins, MCP, conflicts)
 - `contextpilot status` — current proxy/optimization state + recent telemetry
 - `contextpilot analyze` — token usage analysis from Caveman history + ContextPilot events
@@ -17,6 +17,7 @@ Working CLI with 9 commands:
 - `contextpilot mode [name]` — show/set operating mode (observe/canary/auto)
 - `contextpilot benchmark` — run token optimization benchmarks via `claude -p`
 - `contextpilot policies` — evaluate optimization policies against current telemetry
+- `contextpilot dashboard` — local web dashboard at http://127.0.0.1:3141
 - `contextpilot rollback` — roll back to observe mode
 
 Observer hook script at `packages/cli/dist/hooks/observer.js` records events to `~/.context-pilot/telemetry.db`.
@@ -26,7 +27,7 @@ Observer hook script at `packages/cli/dist/hooks/observer.js` records events to 
 ```
 packages/
   core/     — detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks
-  cli/      — commander CLI (9 commands), formatters, hooks
+  cli/      — commander CLI (10 commands), formatters, hooks, dashboard
 docs/       — research findings
 ```
 
@@ -44,6 +45,7 @@ node packages/cli/dist/index.js report    # full report
 node packages/cli/dist/index.js mode      # show mode
 node packages/cli/dist/index.js benchmark # run benchmarks
 node packages/cli/dist/index.js policies  # evaluate policies
+node packages/cli/dist/index.js dashboard # web UI on :3141
 node packages/cli/dist/index.js rollback  # reset to observe
 ```
 
@@ -75,9 +77,9 @@ node packages/cli/dist/index.js rollback  # reset to observe
 - Prompt cache invalidated by tool definition or system prompt changes.
 - Hooks DO run in `claude -p` mode — benchmarks via `-p` will work.
 
-## Next Phase
+## All Phases Complete
 
-6. Dashboard (lightweight local web UI — last priority)
+Phases 0-6 implemented. Observer hooks need registration in project `.claude/settings.json` to fire during sessions.
 
 ## Testing
 

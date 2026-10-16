@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import chalk from 'chalk';
 import {
   buildPolicyContext,
@@ -7,8 +8,6 @@ import {
   readCavemanConfig,
   loadConfig,
   openReadOnly,
-  getRecentSessions,
-  getToolUsageStats,
   paths,
 } from '@contextpilot/core';
 import { printSection } from '../formatters/table.js';
@@ -24,18 +23,28 @@ export async function runPolicies(opts: { json?: boolean }) {
   let toolCallCount = 0;
   let repeatedFileReads = 0;
 
-  try {
-    const db = openReadOnly(paths.contextPilot.telemetryDb);
-    const sessions = getRecentSessions(db, 1);
-    if (sessions.length > 0) {
-      sessionTurns = sessions[0].eventCount;
+  if (existsSync(paths.contextPilot.db)) {
+    try {
+      const db = openReadOnly(paths.contextPilot.db);
+      const sessions = db.prepare(`
+        SELECT s.id, COUNT(e.id) as event_count
+        FROM sessions s LEFT JOIN events e ON e.session_id = s.id
+        GROUP BY s.id ORDER BY s.started_at DESC LIMIT 1
+      `).all() as any[];
+      if (sessions.length > 0) {
+        sessionTurns = sessions[0].event_count;
+      }
+      const toolStats = db.prepare(`
+        SELECT tool_name, COUNT(*) as cnt
+        FROM events WHERE tool_name IS NOT NULL
+        GROUP BY tool_name ORDER BY cnt DESC
+      `).all() as any[];
+      toolCallCount = toolStats.reduce((s: number, t: any) => s + t.cnt, 0);
+      repeatedFileReads = toolStats.filter((t: any) => t.tool_name === 'Read' && t.cnt > 1).length;
+      db.close();
+    } catch {
+      // telemetry DB may not exist or be corrupt
     }
-    const toolStats = getToolUsageStats(db);
-    toolCallCount = toolStats.reduce((s, t) => s + t.count, 0);
-    repeatedFileReads = toolStats.filter(t => t.toolName === 'Read' && t.count > 1).length;
-    db.close();
-  } catch {
-    // telemetry DB may not exist yet
   }
 
   const cavemanEnabled = proxy.detected;

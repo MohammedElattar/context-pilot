@@ -15,6 +15,17 @@ export {
 export { paths } from './config/paths.js';
 export { detectAllTools, type DetectedTool } from './adapters/registry.js';
 export type { OptimizerAdapter, Capability, AdapterStatus, HealthResult, ConflictDeclaration } from './adapters/types.js';
+export { detectConflicts, type Conflict, type ConflictReport, type ConflictSeverity } from './detection/conflicts.js';
+export { loadConfig, saveConfig, setMode, type OperatingMode, type ContextPilotConfig } from './config/mode.js';
+export { runBenchmark, BUILTIN_TASKS } from './benchmark/engine.js';
+export type {
+  BenchmarkTask, BenchmarkConfig, BenchmarkRun, BenchmarkResult,
+  BenchmarkReport, BenchmarkComparison, BenchmarkSummary,
+} from './benchmark/types.js';
+
+export { evaluatePolicies, getTriggeredPolicies, buildPolicyContext } from './policy/engine.js';
+export type { Policy, PolicyContext, PolicyResult, PolicySeverity } from './policy/types.js';
+export { ALL_POLICIES } from './policy/policies.js';
 
 export { getDb, closeDb, openReadOnly } from './db/connection.js';
 export {

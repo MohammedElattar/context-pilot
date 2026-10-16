@@ -6,13 +6,18 @@ Local-first token-optimization control plane for Claude Code.
 
 ContextPilot orchestrates existing optimization tools (primarily Caveman), provides unified telemetry, detects conflicts between tools, and automates optimization decisions. It does NOT duplicate Caveman's compression or recovery.
 
-## Current State (Phase 2)
+## Current State (Phase 5)
 
-Working CLI with commands:
+Working CLI with 9 commands:
 - `contextpilot doctor` — environment inspection (Claude Code, Caveman, hooks, plugins, MCP, conflicts)
 - `contextpilot status` — current proxy/optimization state + recent telemetry
 - `contextpilot analyze` — token usage analysis from Caveman history + ContextPilot events
 - `contextpilot tools` — detected optimization tools, capabilities, conflicts
+- `contextpilot report` — comprehensive optimization report
+- `contextpilot mode [name]` — show/set operating mode (observe/canary/auto)
+- `contextpilot benchmark` — run token optimization benchmarks via `claude -p`
+- `contextpilot policies` — evaluate optimization policies against current telemetry
+- `contextpilot rollback` — roll back to observe mode
 
 Observer hook script at `packages/cli/dist/hooks/observer.js` records events to `~/.context-pilot/telemetry.db`.
 
@@ -20,8 +25,8 @@ Observer hook script at `packages/cli/dist/hooks/observer.js` records events to 
 
 ```
 packages/
-  core/     — detection, adapters, DB, schemas (Zod), paths
-  cli/      — commander CLI, commands, formatters, hooks
+  core/     — detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks
+  cli/      — commander CLI (9 commands), formatters, hooks
 docs/       — research findings
 ```
 
@@ -35,6 +40,11 @@ node packages/cli/dist/index.js doctor    # run doctor
 node packages/cli/dist/index.js status    # run status
 node packages/cli/dist/index.js analyze   # run analyze
 node packages/cli/dist/index.js tools     # list tools
+node packages/cli/dist/index.js report    # full report
+node packages/cli/dist/index.js mode      # show mode
+node packages/cli/dist/index.js benchmark # run benchmarks
+node packages/cli/dist/index.js policies  # evaluate policies
+node packages/cli/dist/index.js rollback  # reset to observe
 ```
 
 ## Key Constraints
@@ -65,12 +75,9 @@ node packages/cli/dist/index.js tools     # list tools
 - Prompt cache invalidated by tool definition or system prompt changes.
 - Hooks DO run in `claude -p` mode — benchmarks via `-p` will work.
 
-## Next Phases
+## Next Phase
 
-3. Conflict detection engine (beyond hooks — proxy, MCP, compression overlap)
-4. Benchmark engine (via `claude -p`, controlled configs)
-5. Policy engine (observe/canary/auto modes)
-6. Dashboard (lightweight local web UI)
+6. Dashboard (lightweight local web UI — last priority)
 
 ## Testing
 

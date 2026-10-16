@@ -1,0 +1,20 @@
+{
+  "name": "@contextpilot/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "context-pilot": "dist/index.js",
+    "contextpilot": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/hooks/observer.ts --format esm --dts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@contextpilot/core": "workspace:*",
+    "chalk": "^5.4.0",
+    "commander": "^13.1.0",
+    "zod": "^3.24.0"
+  }
+}

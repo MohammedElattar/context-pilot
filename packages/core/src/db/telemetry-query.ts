@@ -1,4 +1,5 @@
 import { getDb } from './connection.js';
+import type Database from 'better-sqlite3';
 
 export interface SessionSummary {
   id: string;
@@ -23,6 +24,43 @@ export interface ToolUsageStat {
   call_count: number;
   total_payload_bytes: number;
   avg_duration_ms: number | null;
+}
+
+export interface FileReadStat {
+  file_path: string;
+  read_count: number;
+  total_payload_bytes: number;
+  first_read_ms: number;
+  last_read_ms: number;
+}
+
+export function getSessionFileReads(sessionId: string, db?: Database.Database): FileReadStat[] {
+  const d = db ?? getDb();
+  return d.prepare(`
+    SELECT
+      file_path,
+      COUNT(*) as read_count,
+      COALESCE(SUM(payload_bytes), 0) as total_payload_bytes,
+      MIN(timestamp_ms) as first_read_ms,
+      MAX(timestamp_ms) as last_read_ms
+    FROM file_reads
+    WHERE session_id = ?
+    GROUP BY file_path
+    ORDER BY read_count DESC
+  `).all(sessionId) as FileReadStat[];
+}
+
+export function getRepeatedFileReadCount(sessionId: string, threshold = 1, db?: Database.Database): number {
+  const d = db ?? getDb();
+  const row = d.prepare(`
+    SELECT COUNT(*) as cnt FROM (
+      SELECT file_path FROM file_reads
+      WHERE session_id = ?
+      GROUP BY file_path
+      HAVING COUNT(*) > ?
+    )
+  `).get(sessionId, threshold) as { cnt: number };
+  return row.cnt;
 }
 
 export function getRecentSessions(limit = 20): SessionSummary[] {

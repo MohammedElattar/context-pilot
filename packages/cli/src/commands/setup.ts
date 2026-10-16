@@ -1,0 +1,107 @@
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import chalk from 'chalk';
+import { paths } from '@contextpilot/core';
+
+export async function runSetup(opts: { json?: boolean }) {
+  const results: { mcp: boolean; hooks: boolean; messages: string[] } = {
+    mcp: false, hooks: false, messages: [],
+  };
+
+  // 1. Register MCP server in ~/.claude.json
+  const mcpServerPath = resolve(dirname(new URL(import.meta.url).pathname), '../../packages/mcp/dist/index.js');
+  const actualMcpPath = resolve(process.cwd(), 'packages/mcp/dist/index.js');
+  const mcpBinPath = existsSync(actualMcpPath) ? actualMcpPath : mcpServerPath;
+
+  try {
+    const claudeJsonPath = paths.claude.json;
+    let config: any = {};
+    if (existsSync(claudeJsonPath)) {
+      config = JSON.parse(readFileSync(claudeJsonPath, 'utf-8'));
+    }
+
+    if (!config.mcpServers) config.mcpServers = {};
+
+    config.mcpServers.contextpilot = {
+      type: 'stdio',
+      command: 'node',
+      args: [mcpBinPath],
+      env: {},
+    };
+
+    writeFileSync(claudeJsonPath, JSON.stringify(config, null, 2) + '\n');
+    results.mcp = true;
+    results.messages.push(`MCP server registered: ${mcpBinPath}`);
+  } catch (err) {
+    results.messages.push(`MCP registration failed: ${err instanceof Error ? err.message : err}`);
+  }
+
+  // 2. Register hooks in ~/.claude/settings.local.json
+  try {
+    const localSettingsPath = resolve(paths.claude.dir, 'settings.local.json');
+    let settings: any = {};
+    if (existsSync(localSettingsPath)) {
+      settings = JSON.parse(readFileSync(localSettingsPath, 'utf-8'));
+    }
+
+    if (!settings.hooks) settings.hooks = {};
+
+    const observerCmd = `node ${resolve(process.cwd(), 'packages/cli/dist/hooks/observer.js')}`;
+    const promptCmd = `node ${resolve(process.cwd(), 'packages/cli/dist/hooks/prompt-advisor.js')}`;
+    const compactCmd = `node ${resolve(process.cwd(), 'packages/cli/dist/hooks/compact-advisor.js')}`;
+
+    const hookEntry = (cmd: string, timeout: number) => [{ hooks: [{ type: 'command', command: cmd, timeout }] }];
+
+    const observerEvents = ['SessionStart', 'PostToolUse', 'PostToolUseFailure', 'PreCompact', 'Stop', 'SessionEnd'];
+    for (const event of observerEvents) {
+      const existing = settings.hooks[event] ?? [];
+      const alreadyRegistered = existing.some((g: any) =>
+        g.hooks?.some((h: any) => h.command?.includes('context-pilot') || h.command?.includes('contextpilot'))
+      );
+      if (!alreadyRegistered) {
+        settings.hooks[event] = [...existing, ...hookEntry(observerCmd, 5)];
+      }
+    }
+
+    // UserPromptExpansion — prompt advisor (safe: Caveman not hooked)
+    const upeExisting = settings.hooks['UserPromptExpansion'] ?? [];
+    const upeRegistered = upeExisting.some((g: any) =>
+      g.hooks?.some((h: any) => h.command?.includes('prompt-advisor'))
+    );
+    if (!upeRegistered) {
+      settings.hooks['UserPromptExpansion'] = [...upeExisting, ...hookEntry(promptCmd, 3)];
+    }
+
+    // PostCompact — compact advisor (safe: Caveman hooks PreCompact, not PostCompact)
+    const pcExisting = settings.hooks['PostCompact'] ?? [];
+    const pcRegistered = pcExisting.some((g: any) =>
+      g.hooks?.some((h: any) => h.command?.includes('compact-advisor'))
+    );
+    if (!pcRegistered) {
+      settings.hooks['PostCompact'] = [...pcExisting, ...hookEntry(compactCmd, 3)];
+    }
+
+    mkdirSync(dirname(localSettingsPath), { recursive: true });
+    writeFileSync(localSettingsPath, JSON.stringify(settings, null, 2) + '\n');
+    results.hooks = true;
+    results.messages.push('Observer + advisor hooks registered in ~/.claude/settings.local.json');
+  } catch (err) {
+    results.messages.push(`Hook registration failed: ${err instanceof Error ? err.message : err}`);
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify(results, null, 2));
+    return;
+  }
+
+  console.log(chalk.bold('ContextPilot Setup'));
+  console.log();
+  console.log(`  MCP Server: ${results.mcp ? chalk.green('✓ registered') : chalk.red('✗ failed')}`);
+  console.log(`  Hooks:      ${results.hooks ? chalk.green('✓ registered') : chalk.red('✗ failed')}`);
+  console.log();
+  for (const msg of results.messages) {
+    console.log(`  ${chalk.dim('→')} ${msg}`);
+  }
+  console.log();
+  console.log(chalk.dim('  Restart Claude Code for changes to take effect.'));
+}

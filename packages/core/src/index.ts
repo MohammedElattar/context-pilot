@@ -36,6 +36,8 @@ export {
   type SessionRecord,
   type EventRecord,
   type TokenSnapshot,
+  insertFileRead,
+  type FileReadRecord,
 } from './db/telemetry-store.js';
 export {
   getRecentSessions,
@@ -44,4 +46,7 @@ export {
   type SessionSummary,
   type TokenAggregate,
   type ToolUsageStat,
+  getSessionFileReads,
+  getRepeatedFileReadCount,
+  type FileReadStat,
 } from './db/telemetry-query.js';

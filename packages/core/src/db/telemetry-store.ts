@@ -64,6 +64,26 @@ export function insertEvent(record: EventRecord): void {
   );
 }
 
+export interface FileReadRecord {
+  session_id: string;
+  file_path: string;
+  timestamp_ms: number;
+  payload_bytes?: number | null;
+}
+
+export function insertFileRead(record: FileReadRecord): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO file_reads (session_id, file_path, timestamp_ms, payload_bytes)
+    VALUES (?, ?, ?, ?)
+  `).run(
+    record.session_id,
+    record.file_path,
+    record.timestamp_ms,
+    record.payload_bytes ?? null,
+  );
+}
+
 export function insertTokenSnapshot(record: TokenSnapshot): void {
   const db = getDb();
   db.prepare(`

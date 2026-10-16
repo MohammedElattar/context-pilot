@@ -5,6 +5,19 @@ import { paths } from '../config/paths.js';
 
 let db: Database.Database | null = null;
 
+const MIGRATION_002 = `
+CREATE TABLE IF NOT EXISTS file_reads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  timestamp_ms INTEGER NOT NULL,
+  payload_bytes INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_reads_session ON file_reads(session_id);
+CREATE INDEX IF NOT EXISTS idx_file_reads_path ON file_reads(session_id, file_path);
+`;
+
 const MIGRATION_001 = `
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
@@ -80,6 +93,7 @@ function runMigrations(database: Database.Database): void {
 
   const migrations = [
     { name: '001-init', sql: MIGRATION_001 },
+    { name: '002-file-reads', sql: MIGRATION_002 },
   ];
 
   for (const migration of migrations) {

@@ -65,6 +65,28 @@
           }
         ]
       }
+    ],
+    "UserPromptExpansion": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/elattar/workspace/context-pilot/packages/cli/dist/hooks/prompt-advisor.js",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/elattar/workspace/context-pilot/packages/cli/dist/hooks/compact-advisor.js",
+            "timeout": 3
+          }
+        ]
+      }
     ]
   }
 }

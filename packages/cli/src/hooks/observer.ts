@@ -8,6 +8,7 @@ import {
   upsertSession,
   endSession,
   insertEvent,
+  insertFileRead,
   closeDb,
 } from '@contextpilot/core';
 
@@ -16,6 +17,7 @@ const HookInputSchema = z.object({
   hook_event_name: z.string(),
   cwd: z.string().optional(),
   tool_name: z.string().optional(),
+  tool_input: z.unknown().optional(),
   tool_response: z.string().optional(),
   duration_ms: z.number().optional(),
   model: z.string().optional(),
@@ -66,6 +68,21 @@ async function main(): Promise<void> {
           payload_bytes: input.tool_response?.length,
           duration_ms: input.duration_ms,
         });
+        if (input.tool_name === 'Read' && input.tool_input) {
+          try {
+            const toolInput = typeof input.tool_input === 'string'
+              ? JSON.parse(input.tool_input)
+              : input.tool_input;
+            if (toolInput?.file_path) {
+              insertFileRead({
+                session_id,
+                file_path: toolInput.file_path,
+                timestamp_ms: now,
+                payload_bytes: input.tool_response?.length,
+              });
+            }
+          } catch { /* fail silently */ }
+        }
         break;
 
       case 'PreCompact':

@@ -1,0 +1,18 @@
+{
+  "name": "@contextpilot/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "contextpilot-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@contextpilot/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0"
+  }
+}

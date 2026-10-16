@@ -10,6 +10,7 @@ import { runBenchmarkCommand } from './commands/benchmark.js';
 import { runRollback } from './commands/rollback.js';
 import { runPolicies } from './commands/policies.js';
 import { runDashboard } from './commands/dashboard.js';
+import { runSetup } from './commands/setup.js';
 
 const program = new Command();
 
@@ -66,6 +67,11 @@ program.command('dashboard')
   .description('Start local web dashboard for telemetry visualization')
   .option('--port <port>', 'HTTP port', '3141')
   .action(wrap(runDashboard));
+
+program.command('setup')
+  .description('Register ContextPilot MCP server and hooks globally')
+  .option('--json', 'Output as JSON')
+  .action(wrap(runSetup));
 
 program.command('rollback')
   .description('Roll back to observe mode, disabling all active optimizations')

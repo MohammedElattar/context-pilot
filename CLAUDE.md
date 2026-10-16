@@ -8,7 +8,7 @@ ContextPilot orchestrates existing optimization tools (primarily Caveman), provi
 
 ## Current State (Phase 5)
 
-Working CLI with 10 commands:
+Working CLI with 12 commands:
 - `contextpilot doctor` — environment inspection (Claude Code, Caveman, hooks, plugins, MCP, conflicts)
 - `contextpilot status` — current proxy/optimization state + recent telemetry
 - `contextpilot analyze` — token usage analysis from Caveman history + ContextPilot events
@@ -18,7 +18,13 @@ Working CLI with 10 commands:
 - `contextpilot benchmark` — run token optimization benchmarks via `claude -p`
 - `contextpilot policies` — evaluate optimization policies against current telemetry
 - `contextpilot dashboard` — local web dashboard at http://127.0.0.1:3141
+- `contextpilot setup` — register MCP server + hooks globally
 - `contextpilot rollback` — roll back to observe mode
+
+MCP tools (available to Claude after `contextpilot setup`):
+- `contextpilot_budget` — session token budget summary with policy warnings
+- `contextpilot_session_files` — per-file read counts to avoid re-reads
+- `contextpilot_optimize` — prioritized optimization actions
 
 Observer hook script at `packages/cli/dist/hooks/observer.js` records events to `~/.context-pilot/telemetry.db`.
 
@@ -27,7 +33,8 @@ Observer hook script at `packages/cli/dist/hooks/observer.js` records events to 
 ```
 packages/
   core/     — detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks
-  cli/      — commander CLI (10 commands), formatters, hooks, dashboard
+  cli/      — commander CLI (12 commands), formatters, hooks (observer + advisors), dashboard
+  mcp/      — MCP server (contextpilot_budget, contextpilot_session_files, contextpilot_optimize)
 docs/       — research findings
 ```
 
@@ -77,9 +84,13 @@ node packages/cli/dist/index.js rollback  # reset to observe
 - Prompt cache invalidated by tool definition or system prompt changes.
 - Hooks DO run in `claude -p` mode — benchmarks via `-p` will work.
 
-## All Phases Complete
+## Token-Saving Features
 
-Phases 0-6 implemented. Observer hooks need registration in project `.claude/settings.json` to fire during sessions.
+- **MCP budget tools**: Claude can call `contextpilot_budget`, `contextpilot_session_files`, `contextpilot_optimize` to check burn rate
+- **Prompt advisor hook**: Injects brief optimization hints on `UserPromptExpansion` when policies trigger (safe — Caveman not hooked)
+- **Compact advisor hook**: Injects budget status on `PostCompact` with file re-read warnings (safe — Caveman hooks PreCompact only)
+- **File read tracking**: Observer tracks per-file reads in `file_reads` table, surfaces repeated reads through MCP tools and hooks
+- **Setup command**: `contextpilot setup` registers everything globally
 
 ## Testing
 

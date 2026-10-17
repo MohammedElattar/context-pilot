@@ -84,6 +84,26 @@ export function insertFileRead(record: FileReadRecord): void {
   );
 }
 
+export interface FileWriteRecord {
+  session_id: string;
+  file_path: string;
+  timestamp_ms: number;
+  tool_name: string;
+}
+
+export function insertFileWrite(record: FileWriteRecord): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO file_writes (session_id, file_path, timestamp_ms, tool_name)
+    VALUES (?, ?, ?, ?)
+  `).run(
+    record.session_id,
+    record.file_path,
+    record.timestamp_ms,
+    record.tool_name,
+  );
+}
+
 export function insertTokenSnapshot(record: TokenSnapshot): void {
   const db = getDb();
   db.prepare(`
@@ -98,4 +118,29 @@ export function insertTokenSnapshot(record: TokenSnapshot): void {
     record.cache_write_tokens ?? null,
     record.source,
   );
+}
+
+/**
+ * Clear all ContextPilot telemetry so the dashboard starts fresh.
+ * Only touches ContextPilot's own tables — never Caveman's data.
+ * Returns the number of rows removed per table.
+ */
+export function resetTelemetry(): Record<string, number> {
+  const db = getDb();
+  const tables = [
+    'events',
+    'token_snapshots',
+    'adapter_snapshots',
+    'file_reads',
+    'file_writes',
+    'sessions',
+  ];
+  const removed: Record<string, number> = {};
+  const clear = db.transaction(() => {
+    for (const table of tables) {
+      removed[table] = db.prepare(`DELETE FROM ${table}`).run().changes;
+    }
+  });
+  clear();
+  return removed;
 }

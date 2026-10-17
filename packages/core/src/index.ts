@@ -13,6 +13,12 @@ export {
 } from './adapters/caveman/index.js';
 
 export { paths } from './config/paths.js';
+export {
+  getCavemanTokenStats,
+  getCavemanSessionStats,
+  type CavemanTokenStats,
+  type CavemanSessionStats,
+} from './adapters/caveman/stats-reader.js';
 export { detectAllTools, type DetectedTool } from './adapters/registry.js';
 export type { OptimizerAdapter, Capability, AdapterStatus, HealthResult, ConflictDeclaration } from './adapters/types.js';
 export { detectConflicts, type Conflict, type ConflictReport, type ConflictSeverity } from './detection/conflicts.js';
@@ -23,8 +29,9 @@ export type {
   BenchmarkReport, BenchmarkComparison, BenchmarkSummary,
 } from './benchmark/types.js';
 
-export { evaluatePolicies, getTriggeredPolicies, buildPolicyContext } from './policy/engine.js';
-export type { Policy, PolicyContext, PolicyResult, PolicySeverity } from './policy/types.js';
+export { evaluatePolicies, getTriggeredPolicies, buildPolicyContext, getActionsForMode } from './policy/engine.js';
+export type { ModeAction } from './policy/engine.js';
+export type { Policy, PolicyContext, PolicyResult, PolicySeverity, PolicyActionType } from './policy/types.js';
 export { ALL_POLICIES } from './policy/policies.js';
 
 export { getDb, closeDb, openReadOnly } from './db/connection.js';
@@ -38,6 +45,9 @@ export {
   type TokenSnapshot,
   insertFileRead,
   type FileReadRecord,
+  insertFileWrite,
+  type FileWriteRecord,
+  resetTelemetry,
 } from './db/telemetry-store.js';
 export {
   getRecentSessions,
@@ -49,4 +59,8 @@ export {
   getSessionFileReads,
   getRepeatedFileReadCount,
   type FileReadStat,
+  getSessionFileWrites,
+  type FileWriteStat,
+  getCacheReadRatio,
+  estimateContextWindowUsage,
 } from './db/telemetry-query.js';

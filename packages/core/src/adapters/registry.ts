@@ -2,13 +2,6 @@ import type { OptimizerAdapter, AdapterStatus, HealthResult } from './types.js';
 import { readCavemanConfig } from './caveman/config-reader.js';
 import { readCavemanIntegration } from './caveman/integration-reader.js';
 import { detectProxy } from '../detection/proxies.js';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { access } from 'node:fs/promises';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-
-const execFileAsync = promisify(execFile);
 
 class CavemanAdapter implements OptimizerAdapter {
   id = 'caveman';
@@ -24,20 +17,7 @@ class CavemanAdapter implements OptimizerAdapter {
     'analytics' as const,
   ];
 
-  conflicts = [
-    {
-      withTool: 'rtk',
-      layer: 'PreToolUse hooks',
-      severity: 'high' as const,
-      reason: 'Both modify Bash tool calls via PreToolUse hooks running in parallel.',
-    },
-    {
-      withTool: 'context-mode',
-      layer: 'PostToolUse hooks + compression',
-      severity: 'high' as const,
-      reason: 'Both compress tool output. Overlapping hooks on 6+ events.',
-    },
-  ];
+  conflicts = [];
 
   async detect(): Promise<AdapterStatus> {
     const config = await readCavemanConfig();
@@ -57,75 +37,9 @@ class CavemanAdapter implements OptimizerAdapter {
   }
 }
 
-class RtkAdapter implements OptimizerAdapter {
-  id = 'rtk';
-  name = 'RTK (Rust Token Killer)';
-  version: string | null = null;
-
-  capabilities = ['compression' as const, 'hook-modifier' as const];
-
-  conflicts = [
-    {
-      withTool: 'caveman',
-      layer: 'PreToolUse hooks',
-      severity: 'high' as const,
-      reason: 'Both modify Bash tool calls via PreToolUse hooks running in parallel.',
-    },
-  ];
-
-  async detect(): Promise<AdapterStatus> {
-    try {
-      const { stdout } = await execFileAsync('rtk', ['--version'], { timeout: 3000 });
-      this.version = stdout.trim().match(/(\d+\.\d+\.\d+)/)?.[1] ?? null;
-      return 'installed';
-    } catch {
-      try {
-        await access(join(homedir(), '.local', 'share', 'rtk'));
-        return 'detected';
-      } catch {
-        return 'not-found';
-      }
-    }
-  }
-
-  async healthCheck(): Promise<HealthResult> {
-    const status = await this.detect();
-    return status === 'installed'
-      ? { healthy: true, message: `RTK v${this.version}` }
-      : { healthy: false, message: 'RTK not installed' };
-  }
-}
-
-class CcusageAdapter implements OptimizerAdapter {
-  id = 'ccusage';
-  name = 'ccusage';
-  version: string | null = null;
-
-  capabilities = ['analytics' as const];
-  conflicts = [];
-
-  async detect(): Promise<AdapterStatus> {
-    try {
-      const { stdout } = await execFileAsync('ccusage', ['--version'], { timeout: 3000 });
-      this.version = stdout.trim().match(/(\d+\.\d+\.\d+)/)?.[1] ?? null;
-      return 'installed';
-    } catch {
-      return 'not-found';
-    }
-  }
-
-  async healthCheck(): Promise<HealthResult> {
-    const status = await this.detect();
-    return status === 'installed'
-      ? { healthy: true, message: `ccusage v${this.version}` }
-      : { healthy: false, message: 'ccusage not installed' };
-  }
-}
 
 const adapters: OptimizerAdapter[] = [
   new CavemanAdapter(),
-  new RtkAdapter(),
-  new CcusageAdapter(),
 ];
 
 export interface DetectedTool {

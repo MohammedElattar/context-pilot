@@ -18,6 +18,19 @@ CREATE INDEX IF NOT EXISTS idx_file_reads_session ON file_reads(session_id);
 CREATE INDEX IF NOT EXISTS idx_file_reads_path ON file_reads(session_id, file_path);
 `;
 
+const MIGRATION_003 = `
+CREATE TABLE IF NOT EXISTS file_writes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  timestamp_ms INTEGER NOT NULL,
+  tool_name TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_writes_session ON file_writes(session_id);
+CREATE INDEX IF NOT EXISTS idx_file_writes_path ON file_writes(session_id, file_path);
+`;
+
 const MIGRATION_001 = `
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
@@ -94,6 +107,7 @@ function runMigrations(database: Database.Database): void {
   const migrations = [
     { name: '001-init', sql: MIGRATION_001 },
     { name: '002-file-reads', sql: MIGRATION_002 },
+    { name: '003-file-writes', sql: MIGRATION_003 },
   ];
 
   for (const migration of migrations) {

@@ -1,7 +1,25 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import chalk from 'chalk';
 import { paths } from '@contextpilot/core';
+
+function findProjectRoot(): string {
+  // Try from import.meta.url first, then cwd
+  const candidates = [
+    dirname(new URL(import.meta.url).pathname),
+    process.cwd(),
+  ];
+  for (const start of candidates) {
+    let dir = start;
+    for (let i = 0; i < 10; i++) {
+      if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  return process.cwd();
+}
 
 export async function runSetup(opts: { json?: boolean }) {
   const results: { mcp: boolean; hooks: boolean; messages: string[] } = {
@@ -9,9 +27,9 @@ export async function runSetup(opts: { json?: boolean }) {
   };
 
   // 1. Register MCP server in ~/.claude.json
-  const mcpServerPath = resolve(dirname(new URL(import.meta.url).pathname), '../../packages/mcp/dist/index.js');
-  const actualMcpPath = resolve(process.cwd(), 'packages/mcp/dist/index.js');
-  const mcpBinPath = existsSync(actualMcpPath) ? actualMcpPath : mcpServerPath;
+  // Find project root by walking up from import.meta.url or cwd until we find pnpm-workspace.yaml
+  const projectRoot = findProjectRoot();
+  const mcpBinPath = resolve(projectRoot, 'packages', 'mcp', 'dist', 'index.js');
 
   try {
     const claudeJsonPath = paths.claude.json;
@@ -46,9 +64,10 @@ export async function runSetup(opts: { json?: boolean }) {
 
     if (!settings.hooks) settings.hooks = {};
 
-    const observerCmd = `node ${resolve(process.cwd(), 'packages/cli/dist/hooks/observer.js')}`;
-    const promptCmd = `node ${resolve(process.cwd(), 'packages/cli/dist/hooks/prompt-advisor.js')}`;
-    const compactCmd = `node ${resolve(process.cwd(), 'packages/cli/dist/hooks/compact-advisor.js')}`;
+    const hookBase = resolve(projectRoot, 'packages', 'cli', 'dist', 'hooks');
+    const observerCmd = `node ${resolve(hookBase, 'observer.js')}`;
+    const promptCmd = `node ${resolve(hookBase, 'prompt-advisor.js')}`;
+    const compactCmd = `node ${resolve(hookBase, 'compact-advisor.js')}`;
 
     const hookEntry = (cmd: string, timeout: number) => [{ hooks: [{ type: 'command', command: cmd, timeout }] }];
 

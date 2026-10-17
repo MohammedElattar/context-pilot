@@ -10,7 +10,12 @@ import {
   paths,
   buildPolicyContext,
   getTriggeredPolicies,
+  getActionsForMode,
+  evaluatePolicies,
   getRepeatedFileReadCount,
+  getCacheReadRatio,
+  estimateContextWindowUsage,
+  loadConfig,
 } from '@contextpilot/core';
 
 const InputSchema = z.object({
@@ -31,6 +36,8 @@ async function main(): Promise<void> {
 
   let toolCount = 0;
   let repeatedReads = 0;
+  let cacheRatio: number | null = null;
+  let contextPercent: number | null = null;
 
   try {
     const db = openReadOnly(paths.contextPilot.db);
@@ -45,20 +52,33 @@ async function main(): Promise<void> {
     ).get(session.id) as any)?.cnt ?? 0;
 
     repeatedReads = getRepeatedFileReadCount(session.id, 1, db);
+    cacheRatio = getCacheReadRatio(session.id, db);
+    contextPercent = estimateContextWindowUsage(session.id, db);
     db.close();
   } catch { return; }
 
+  const config = loadConfig();
   const ctx = buildPolicyContext({
     toolCallCount: toolCount,
     repeatedFileReads: repeatedReads,
+    cacheReadRatio: cacheRatio ?? undefined,
+    contextWindowUsedPercent: contextPercent ?? undefined,
+    currentMode: config.mode,
   });
 
-  const triggered = getTriggeredPolicies(ctx);
+  const results = evaluatePolicies(ctx);
+  const triggered = results.filter(r => r.triggered);
   if (triggered.length === 0) return;
 
-  const parts: string[] = [`ContextPilot: ${toolCount} tool calls`];
+  const actions = getActionsForMode(config.mode, results);
+  const parts: string[] = [`ContextPilot [${config.mode}]: ${toolCount} tool calls`];
   if (repeatedReads > 0) parts.push(`${repeatedReads} files re-read`);
-  parts.push(triggered[0].action);
+
+  if (actions.length > 0) {
+    parts.push(actions.map(a => a.action).join(' | '));
+  } else {
+    parts.push(triggered[0].action);
+  }
 
   process.stdout.write(parts.join('. ').slice(0, 295));
 }

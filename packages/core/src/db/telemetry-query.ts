@@ -63,6 +63,30 @@ export function getRepeatedFileReadCount(sessionId: string, threshold = 1, db?: 
   return row.cnt;
 }
 
+export interface FileWriteStat {
+  file_path: string;
+  write_count: number;
+  tools_used: string;
+  first_write_ms: number;
+  last_write_ms: number;
+}
+
+export function getSessionFileWrites(sessionId: string, db?: Database.Database): FileWriteStat[] {
+  const d = db ?? getDb();
+  return d.prepare(`
+    SELECT
+      file_path,
+      COUNT(*) as write_count,
+      GROUP_CONCAT(DISTINCT tool_name) as tools_used,
+      MIN(timestamp_ms) as first_write_ms,
+      MAX(timestamp_ms) as last_write_ms
+    FROM file_writes
+    WHERE session_id = ?
+    GROUP BY file_path
+    ORDER BY write_count DESC
+  `).all(sessionId) as FileWriteStat[];
+}
+
 export function getRecentSessions(limit = 20): SessionSummary[] {
   const db = getDb();
   return db.prepare(`
@@ -99,6 +123,56 @@ export function getTokenAggregate(sinceMs?: number): TokenAggregate {
   `).get(...params) as TokenAggregate;
 
   return row;
+}
+
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  'claude-opus-4-6': 200000,
+  'claude-sonnet-4-5-20250514': 200000,
+  'claude-sonnet-4-20250514': 200000,
+  'claude-haiku-4-5-20251001': 200000,
+  'claude-fable-5-1': 200000,
+  'claude-opus-5-5': 200000,
+  'claude-sonnet-5-5': 200000,
+  'claude-haiku-5-5': 200000,
+};
+
+const DEFAULT_CONTEXT_LIMIT = 200000;
+
+export function estimateContextWindowUsage(sessionId: string, db?: Database.Database): number | null {
+  const d = db ?? getDb();
+
+  const session = d.prepare('SELECT model FROM sessions WHERE id = ?').get(sessionId) as { model: string | null } | undefined;
+  if (!session) return null;
+
+  const limit: number = (session.model ? MODEL_CONTEXT_LIMITS[session.model] : undefined) ?? DEFAULT_CONTEXT_LIMIT;
+
+  const row = d.prepare(`
+    SELECT
+      COALESCE(SUM(input_tokens), 0) as total_input,
+      COALESCE(SUM(output_tokens), 0) as total_output,
+      COALESCE(SUM(cache_write_tokens), 0) as total_cache_write
+    FROM token_snapshots WHERE session_id = ?
+  `).get(sessionId) as { total_input: number; total_output: number; total_cache_write: number };
+
+  const used = row.total_input + row.total_output + row.total_cache_write;
+  if (used === 0) return null;
+
+  return Math.min(100, (used / limit) * 100);
+}
+
+export function getCacheReadRatio(sessionId?: string, db?: Database.Database): number | null {
+  const d = db ?? getDb();
+  const where = sessionId ? 'WHERE session_id = ?' : '';
+  const params = sessionId ? [sessionId] : [];
+  const row = d.prepare(`
+    SELECT
+      COALESCE(SUM(input_tokens), 0) as total_input,
+      COALESCE(SUM(cache_read_tokens), 0) as total_cache_read
+    FROM token_snapshots ${where}
+  `).get(...params) as { total_input: number; total_cache_read: number };
+  const total = row.total_input + row.total_cache_read;
+  if (total === 0) return null;
+  return row.total_cache_read / total;
 }
 
 export function getToolUsageStats(sinceMs?: number, limit = 20): ToolUsageStat[] {

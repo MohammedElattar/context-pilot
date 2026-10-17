@@ -1,5 +1,12 @@
 export type PolicySeverity = 'info' | 'warn' | 'critical';
 
+export type PolicyActionType =
+  | 'suggest'
+  | 'compress'
+  | 'split-session'
+  | 'enable-module'
+  | 'reduce-reads';
+
 export interface PolicyContext {
   contextWindowUsedPercent: number | null;
   cacheReadRatio: number | null;
@@ -17,6 +24,7 @@ export interface PolicyResult {
   severity: PolicySeverity;
   triggered: boolean;
   action: string;
+  actionType: PolicyActionType;
   reason: string;
 }
 

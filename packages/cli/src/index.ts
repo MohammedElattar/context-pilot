@@ -11,6 +11,7 @@ import { runRollback } from './commands/rollback.js';
 import { runPolicies } from './commands/policies.js';
 import { runDashboard } from './commands/dashboard.js';
 import { runSetup } from './commands/setup.js';
+import { runRecover } from './commands/recover.js';
 
 const program = new Command();
 
@@ -72,6 +73,11 @@ program.command('setup')
   .description('Register ContextPilot MCP server and hooks globally')
   .option('--json', 'Output as JSON')
   .action(wrap(runSetup));
+
+program.command('recover <handle>')
+  .description('Recover compressed content via Caveman MCP (pass a ccr_ handle)')
+  .option('--json', 'Output as JSON')
+  .action(wrap(runRecover));
 
 program.command('rollback')
   .description('Roll back to observe mode, disabling all active optimizations')

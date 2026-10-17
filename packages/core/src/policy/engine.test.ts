@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluatePolicies, getTriggeredPolicies, buildPolicyContext } from './engine.js';
+import { evaluatePolicies, getTriggeredPolicies, buildPolicyContext, getActionsForMode } from './engine.js';
 
 describe('policy engine', () => {
   it('returns results for all policies', () => {
@@ -52,5 +52,35 @@ describe('policy engine', () => {
     const ctx = buildPolicyContext({});
     const triggered = getTriggeredPolicies(ctx);
     expect(triggered.length).toBe(0);
+  });
+
+  it('all results include actionType', () => {
+    const ctx = buildPolicyContext({ toolCallCount: 80, repeatedFileReads: 10 });
+    const results = evaluatePolicies(ctx);
+    results.forEach(r => {
+      expect(r.actionType).toBeTruthy();
+    });
+  });
+
+  it('getActionsForMode returns nothing in observe mode', () => {
+    const ctx = buildPolicyContext({ toolCallCount: 80 });
+    const results = evaluatePolicies(ctx);
+    const actions = getActionsForMode('observe', results);
+    expect(actions.length).toBe(0);
+  });
+
+  it('getActionsForMode returns actions in canary mode', () => {
+    const ctx = buildPolicyContext({ toolCallCount: 80 });
+    const results = evaluatePolicies(ctx);
+    const actions = getActionsForMode('canary', results);
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions[0].policyId).toBe('excessive-tool-calls');
+  });
+
+  it('getActionsForMode returns all triggered in auto mode', () => {
+    const ctx = buildPolicyContext({ toolCallCount: 80, repeatedFileReads: 10 });
+    const results = evaluatePolicies(ctx);
+    const actions = getActionsForMode('auto', results);
+    expect(actions.length).toBe(2);
   });
 });

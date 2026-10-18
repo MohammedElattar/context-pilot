@@ -1,13 +1,53 @@
 import chalk from 'chalk';
-import { runBenchmark, type BenchmarkConfig } from '@contextpilot/core';
+import { runBenchmark, storeBenchmarkReport, runResearchBenchmark, type BenchmarkConfig } from '@contextpilot/core';
 
 interface BenchmarkOptions {
   json?: boolean;
   trials?: string;
   config?: string;
+  research?: boolean;
+  query?: string;
+  urls?: string;
+  expect?: string;
+  budget?: string;
+}
+
+/**
+ * Research-gateway benchmark: native raw-dump vs gateway evidence over the same
+ * fetched bytes. Needs live egress to fetch the given URLs.
+ */
+async function runResearchBenchmarkCommand(options: BenchmarkOptions): Promise<void> {
+  const urls = (options.urls ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  if (urls.length === 0) {
+    const msg = 'Research benchmark needs --urls <comma-separated URLs or owner/repo#n>, plus --query <text> and --expect <answer substring>. It fetches each URL live (requires network egress) and compares native raw-dump tokens vs gateway evidence tokens.';
+    if (options.json) console.log(JSON.stringify({ error: msg }, null, 2));
+    else console.log(chalk.yellow(msg));
+    return;
+  }
+  const report = await runResearchBenchmark([
+    { id: 'cli', query: options.query ?? '', urls, expectAnswerIncludes: options.expect ?? '' },
+  ], { budget_tokens: options.budget ? parseInt(options.budget, 10) : undefined });
+
+  if (options.json) { console.log(JSON.stringify(report, null, 2)); return; }
+
+  console.log();
+  console.log(chalk.bold.underline('ContextPilot Research Benchmark'));
+  console.log();
+  const r = report.results[0];
+  console.log(`  Native (raw dump):   ${r.native.est_model_tokens} est tokens, resolved=${r.native.resolved}`);
+  console.log(`  Gateway (evidence):  ${r.gateway.est_model_tokens} est tokens, resolved=${r.gateway.resolved}`);
+  console.log(`  Token reduction:     ${chalk.green(r.token_reduction_percent + '%')}`);
+  console.log(`  Latency:             native ${r.native.latency_ms}ms, gateway ${r.gateway.latency_ms}ms`);
+  console.log();
+  console.log(chalk.dim(`  ${report.summary.note}`));
+  console.log();
 }
 
 export async function runBenchmarkCommand(options: BenchmarkOptions): Promise<void> {
+  if (options.research) {
+    await runResearchBenchmarkCommand(options);
+    return;
+  }
   const trials = parseInt(options.trials ?? '1', 10);
   const configs: BenchmarkConfig[] = options.config
     ? (options.config.split(',') as BenchmarkConfig[])
@@ -26,8 +66,12 @@ export async function runBenchmarkCommand(options: BenchmarkOptions): Promise<vo
     onProgress: (msg) => console.log(`  ${chalk.dim(msg)}`),
   });
 
+  // Persist summaries for later baseline comparison (fail-open).
+  let stored = 0;
+  try { stored = storeBenchmarkReport(report); } catch { /* persistence is best-effort */ }
+
   if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
+    console.log(JSON.stringify({ ...report, persisted_rows: stored }, null, 2));
     return;
   }
 

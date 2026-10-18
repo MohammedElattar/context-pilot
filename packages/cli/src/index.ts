@@ -12,6 +12,7 @@ import { runPolicies } from './commands/policies.js';
 import { runDashboard } from './commands/dashboard.js';
 import { runSetup } from './commands/setup.js';
 import { runRecover } from './commands/recover.js';
+import { runMcp } from './commands/mcp.js';
 
 const program = new Command();
 
@@ -53,14 +54,19 @@ program.command('mode [name]')
   .action(wrap(runMode));
 
 program.command('benchmark')
-  .description('Run token optimization benchmarks via claude -p')
+  .description('Run token optimization benchmarks via claude -p, or --research for the research gateway')
   .option('--json', 'Output as JSON')
   .option('--trials <n>', 'Number of trials per task', '1')
   .option('--config <configs>', 'Comma-separated configs: native,caveman', 'native')
+  .option('--research', 'Benchmark the research gateway (native raw-dump vs gateway evidence)')
+  .option('--query <text>', 'Research benchmark: the question/error to research')
+  .option('--urls <csv>', 'Research benchmark: comma-separated URLs or owner/repo#n (fetched live)')
+  .option('--expect <text>', 'Research benchmark: answer substring that must survive')
+  .option('--budget <n>', 'Research benchmark: evidence token budget')
   .action(wrap(runBenchmarkCommand));
 
-program.command('policies')
-  .description('Evaluate optimization policies against current telemetry')
+program.command('policies [action] [id]')
+  .description('Policies: evaluate (default) | validate | explain <id> | simulate')
   .option('--json', 'Output as JSON')
   .action(wrap(runPolicies));
 
@@ -72,12 +78,19 @@ program.command('dashboard')
 program.command('setup')
   .description('Register ContextPilot MCP server and hooks globally')
   .option('--json', 'Output as JSON')
+  .option('--research', 'Also register the non-blocking research-gateway PreToolUse advisory')
   .action(wrap(runSetup));
 
 program.command('recover <handle>')
   .description('Recover compressed content via Caveman MCP (pass a ccr_ handle)')
   .option('--json', 'Output as JSON')
   .action(wrap(runRecover));
+
+program.command('mcp [action] [server]')
+  .description('Profile MCP servers and tools: list | profile | inspect <server> | conflicts')
+  .option('--json', 'Output as JSON')
+  .option('--days <n>', 'Window in days for profile/inspect', '7')
+  .action(wrap(runMcp));
 
 program.command('rollback')
   .description('Roll back to observe mode, disabling all active optimizations')

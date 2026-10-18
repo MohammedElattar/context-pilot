@@ -21,7 +21,7 @@ function findProjectRoot(): string {
   return process.cwd();
 }
 
-export async function runSetup(opts: { json?: boolean }) {
+export async function runSetup(opts: { json?: boolean; research?: boolean }) {
   const results: { mcp: boolean; hooks: boolean; messages: string[] } = {
     mcp: false, hooks: false, messages: [],
   };
@@ -100,10 +100,27 @@ export async function runSetup(opts: { json?: boolean }) {
       settings.hooks['PostCompact'] = [...pcExisting, ...hookEntry(compactCmd, 3)];
     }
 
+    // PreToolUse — research advisor (opt-in via --research). NON-BLOCKING:
+    // it only adds additionalContext, never a permissionDecision, so it coexists
+    // with Caveman's PreToolUse hooks and never blocks a tool. Strict routing off.
+    if (opts.research) {
+      const researchCmd = `node ${resolve(hookBase, 'research-advisor.js')}`;
+      const ptuExisting = settings.hooks['PreToolUse'] ?? [];
+      const ptuRegistered = ptuExisting.some((g: any) =>
+        g.hooks?.some((h: any) => h.command?.includes('research-advisor'))
+      );
+      if (!ptuRegistered) {
+        settings.hooks['PreToolUse'] = [...ptuExisting, ...hookEntry(researchCmd, 3)];
+      }
+    }
+
     mkdirSync(dirname(localSettingsPath), { recursive: true });
     writeFileSync(localSettingsPath, JSON.stringify(settings, null, 2) + '\n');
     results.hooks = true;
     results.messages.push('Observer + advisor hooks registered in ~/.claude/settings.local.json');
+    if (opts.research) {
+      results.messages.push('Research advisory (non-blocking PreToolUse) registered. Skill at skills/research/SKILL.md.');
+    }
   } catch (err) {
     results.messages.push(`Hook registration failed: ${err instanceof Error ? err.message : err}`);
   }

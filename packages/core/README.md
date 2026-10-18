@@ -1,6 +1,6 @@
 # @contextpilot/core
 
-Shared logic for [ContextPilot](../../README.md): detection, adapters, telemetry storage, policy engine, and benchmarks. Consumed by `@contextpilot/cli` and `@contextpilot/mcp`.
+Shared logic for [ContextPilot](../../README.md): detection, adapters, telemetry storage, policy engine, benchmarks, and the research gateway (SSRF-safe fetch, extraction, ranking, token budget, SQLite cache + evidence ledger, GitHub provider). Consumed by `@contextpilot/cli` and `@contextpilot/mcp`.
 
 ## What's inside
 

@@ -26,6 +26,10 @@ export interface PolicyResult {
   action: string;
   actionType: PolicyActionType;
   reason: string;
+  /** 0..1 confidence when triggered (declarative policies); optional. */
+  confidence?: number;
+  /** Conflict-resolution priority; higher wins. Optional. */
+  priority?: number;
 }
 
 export interface Policy {

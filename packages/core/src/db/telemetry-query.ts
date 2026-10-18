@@ -106,10 +106,18 @@ export function getRecentSessions(limit = 20): SessionSummary[] {
   `).all(limit) as SessionSummary[];
 }
 
-export function getTokenAggregate(sinceMs?: number): TokenAggregate {
+/**
+ * Aggregate token usage for one kind only (default 'observed'), so observed /
+ * estimated / billed snapshots are never summed together. Pass kind=null to
+ * sum across all kinds explicitly.
+ */
+export function getTokenAggregate(sinceMs?: number, kind: 'observed' | 'estimated' | 'billed' | null = 'observed'): TokenAggregate {
   const db = getDb();
-  const where = sinceMs ? 'WHERE timestamp_ms >= ?' : '';
-  const params = sinceMs ? [sinceMs] : [];
+  const clauses: string[] = [];
+  const params: number[] = [];
+  if (sinceMs) { clauses.push('timestamp_ms >= ?'); params.push(sinceMs); }
+  if (kind) clauses.push(`(usage_kind = '${kind}' OR usage_kind IS NULL)`);
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
   const row = db.prepare(`
     SELECT

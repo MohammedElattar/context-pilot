@@ -4,6 +4,8 @@
 // Writes NOTHING to stdout. Fails silently. Must exit < 5s.
 
 import { z } from 'zod';
+import { statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
   upsertSession,
   endSession,
@@ -13,11 +15,23 @@ import {
   closeDb,
 } from '@contextpilot/core';
 
+/** Fingerprint a file by path + mtime + size — never its content. Null on stat failure. */
+function fileFingerprint(path: string): string | null {
+  try {
+    const s = statSync(path);
+    return createHash('sha256').update(`${path}:${s.mtimeMs}:${s.size}`).digest('hex').slice(0, 16);
+  } catch {
+    return null;
+  }
+}
+
 const HookInputSchema = z.object({
   session_id: z.string(),
   hook_event_name: z.string(),
   cwd: z.string().optional(),
   tool_name: z.string().optional(),
+  // Claude Code sends a stable id per tool call; used as a dedup key when present.
+  tool_use_id: z.string().optional(),
   tool_input: z.unknown().optional(),
   // Claude Code sends tool_response as a string OR an object depending on the
   // tool, so accept anything — a strict z.string() rejected object responses
@@ -77,6 +91,10 @@ async function main(): Promise<void> {
           tool_name: input.tool_name,
           payload_bytes: responseBytes(input.tool_response),
           duration_ms: input.duration_ms,
+          // Stable dedup key only when Claude Code gives a tool_use_id.
+          event_id: input.tool_use_id ? `${hook_event_name}:${input.tool_use_id}` : undefined,
+          source: 'observer',
+          confidence: 1,
         });
         if (input.tool_input) {
           try {
@@ -84,11 +102,14 @@ async function main(): Promise<void> {
               ? JSON.parse(input.tool_input)
               : input.tool_input;
             if (input.tool_name === 'Read' && toolInput?.file_path) {
+              const isPartial = toolInput.offset != null || toolInput.limit != null ? 1 : 0;
               insertFileRead({
                 session_id,
                 file_path: toolInput.file_path,
                 timestamp_ms: now,
                 payload_bytes: responseBytes(input.tool_response),
+                is_partial: isPartial,
+                fingerprint: fileFingerprint(toolInput.file_path),
               });
             }
             if ((input.tool_name === 'Write' || input.tool_name === 'Edit') && toolInput?.file_path) {
@@ -109,6 +130,8 @@ async function main(): Promise<void> {
           session_id,
           event_type: hook_event_name,
           timestamp_ms: now,
+          source: 'observer',
+          confidence: 1,
         });
         break;
 
@@ -117,6 +140,8 @@ async function main(): Promise<void> {
           session_id,
           event_type: hook_event_name,
           timestamp_ms: now,
+          source: 'observer',
+          confidence: 1,
         });
     }
   } catch {

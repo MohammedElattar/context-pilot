@@ -31,5 +31,6 @@ export const paths = {
     dir: join(home, '.context-pilot'),
     db: join(home, '.context-pilot', 'telemetry.db'),
     config: join(home, '.context-pilot', 'config.json'),
+    policies: join(home, '.context-pilot', 'policies.json'),
   },
 } as const;

@@ -9,6 +9,7 @@ import {
   loadConfig,
   getSessionFileReads,
   getRepeatedFileReadCount,
+  getSessionCost,
 } from '@contextpilot/core';
 import type Database from 'better-sqlite3';
 
@@ -68,6 +69,15 @@ export async function handleBudget(args: { session_id?: string }) {
 
   if (!stats) return { error: 'Could not read session data.' };
 
+  // Cost: estimated from our token snapshots + Caveman billed USD when present.
+  const cost = queryDb(db => {
+    const c = getSessionCost(sessionId, db);
+    return {
+      estimated: c.estimated ? { usd: c.estimated.usd, model: c.estimated.modelId, partial: c.estimated.partial, kind: 'estimated' } : null,
+      billed: c.billed ? { usd: c.billed.usd, source: c.billed.source, kind: 'billed' } : null,
+    };
+  }, { estimated: null, billed: null });
+
   const [proxy, cavemanConfig, config] = await Promise.all([
     detectProxy(),
     readCavemanConfig(),
@@ -88,6 +98,7 @@ export async function handleBudget(args: { session_id?: string }) {
 
   return {
     ...stats,
+    cost,
     duration_minutes: stats.started_at
       ? Math.round(((stats.ended_at ?? Date.now()) - stats.started_at) / 60000)
       : null,

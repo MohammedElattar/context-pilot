@@ -1,5 +1,6 @@
-import type { PolicyContext, PolicyResult, PolicyActionType } from './types.js';
+import type { Policy, PolicyContext, PolicyResult, PolicyActionType } from './types.js';
 import { ALL_POLICIES } from './policies.js';
+import { loadDeclarativePolicies } from './declarative.js';
 
 export interface ModeAction {
   policyId: string;
@@ -10,6 +11,16 @@ export interface ModeAction {
 
 export function evaluatePolicies(ctx: PolicyContext): PolicyResult[] {
   return ALL_POLICIES.map(policy => policy.evaluate(ctx));
+}
+
+/**
+ * Evaluate built-in code policies plus any user declarative policies. Declarative
+ * policies are loaded fail-open (missing/invalid file → none). Pass an explicit
+ * `declarative` list to evaluate without touching disk (used by simulation).
+ */
+export function evaluateAllPolicies(ctx: PolicyContext, declarative?: Policy[]): PolicyResult[] {
+  const decl = declarative ?? loadDeclarativePolicies();
+  return [...ALL_POLICIES, ...decl].map(policy => policy.evaluate(ctx));
 }
 
 export function getTriggeredPolicies(ctx: PolicyContext): PolicyResult[] {

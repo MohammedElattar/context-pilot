@@ -10,36 +10,47 @@ ContextPilot orchestrates existing optimization tools (primarily [Caveman](https
 
 ## Prerequisites
 
-- **Node.js** >= 20
-- **pnpm** 10 (`npm install -g pnpm@10`)
+- **Node.js** >= 20 — the installer auto-installs it via nvm (user-space) if missing
+- **pnpm** 10 — the installer enables it via corepack (npm-global fallback)
 - **Claude Code** — the CLI this tool observes and optimizes
 - **Caveman** (optional) — ContextPilot detects and integrates with it if installed, and works standalone if not
+- **`gh`** (optional) — the research gateway uses it for GitHub issues/PRs; it falls back to the public API without it
 
 ## Quick Start
 
+Clone and run the one-command installer — it installs prerequisites (Node via nvm if missing, pnpm via corepack), installs dependencies, builds every package, and registers the MCP server + hooks + research advisory in `~/.claude`:
+
 ```bash
-# 1. Clone
 git clone https://github.com/MohammedElattar/context-pilot.git
 cd context-pilot
-
-# 2. Install dependencies
-pnpm install
-
-# 3. Build all packages
-pnpm -r build
-
-# 4. (Optional) Make the `contextpilot` command available everywhere
-cd packages/cli && pnpm link --global && cd ../..
-
-# 5. Register hooks and the MCP server globally
-contextpilot setup          # or: node packages/cli/dist/index.js setup
-
-# 6. Restart Claude Code for the hooks and MCP tools to take effect
+./scripts/install.sh
 ```
 
-Verify the install with `contextpilot doctor`.
+Then **restart Claude Code** and verify with `node packages/cli/dist/index.js doctor`.
 
-> If you skip step 4, run commands with `node packages/cli/dist/index.js <command>` instead of `contextpilot <command>`.
+Installer options:
+
+```bash
+./scripts/install.sh                 # everything (default)
+./scripts/install.sh --no-setup      # install + build only; don't touch ~/.claude
+./scripts/install.sh --no-research   # register setup without the research advisory
+./scripts/install.sh --no-node-install   # fail instead of auto-installing Node
+./scripts/install.sh --test          # also run the test suite
+./scripts/install.sh --help
+```
+
+> `setup` writes `~/.claude.json` and `~/.claude/settings.local.json` (how Claude Code discovers the tool). Use `--no-setup` to skip it. The script is idempotent — safe to re-run.
+
+### Manual install (alternative)
+
+```bash
+pnpm install && pnpm -r build
+node packages/cli/dist/index.js setup --research   # register globally
+# optional: make the `contextpilot` command global
+cd packages/cli && pnpm link --global && cd ../..
+```
+
+> Without the global link, run commands as `node packages/cli/dist/index.js <command>` instead of `contextpilot <command>`.
 
 ### Troubleshooting
 
@@ -60,7 +71,7 @@ Verify the install with `contextpilot doctor`.
 | `contextpilot tools` | Detected optimization tools, capabilities, conflicts |
 | `contextpilot report` | Comprehensive optimization report |
 | `contextpilot mode [name]` | Show or set operating mode (`observe`, `canary`, `auto`) |
-| `contextpilot benchmark` | Run token optimization benchmarks via `claude -p` |
+| `contextpilot benchmark` | Run token optimization benchmarks via `claude -p` (add `--research --urls <csv> --query <q> --expect <s>` for the research-gateway A/B) |
 | `contextpilot policies` | Evaluate optimization policies against current telemetry |
 | `contextpilot dashboard` | Local web dashboard at `http://127.0.0.1:3141` |
 | `contextpilot setup` | Register MCP server and hooks globally |
@@ -85,13 +96,28 @@ After running `contextpilot setup`, these tools are available to Claude during s
 - **`contextpilot_session_files`** — Per-file read counts to avoid re-reads
 - **`contextpilot_optimize`** — Prioritized optimization actions
 
+### Research Gateway
+
+Reduces tokens spent on external research during bug-hunting. Instead of pulling a raw web page, doc, or GitHub thread into context, these tools fetch, extract, rank, token-budget, and cache the evidence — preserving exact error strings, stack traces, and version-specific text — and keep the full source recoverable. SSRF-guarded (private/metadata/rebinding/redirect blocks), secret-redacted, fail-open (native `WebFetch`/`WebSearch` stay as fallback).
+
+- **`contextpilot_fetch`** — Fetch one URL; returns ranked, budget-capped evidence with stable `evidence_id`s; cache-first.
+- **`contextpilot_research`** — Research a question across several URLs (web/docs and GitHub issues/PRs via `gh`); merged, ranked, budgeted with per-source provenance.
+- **`contextpilot_expand`** — Recover an omitted section or the full page by `evidence_id`, from cache, no network.
+- **`contextpilot_research_state`** — Routing adoption (gateway vs native), cache hit-rate, estimated tokens saved; shown on the dashboard's Research Gateway panel.
+
+Optional strict routing / advisory: `contextpilot setup --research` registers a non-blocking PreToolUse hint toward these tools (never blocks a call). A concise usage skill lives at `skills/research/SKILL.md`. See [`docs/research-gateway-plan.md`](docs/research-gateway-plan.md).
+
 ## Architecture
 
 ```
 packages/
-  core/     — Detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks
-  cli/      — Commander CLI (13 commands), formatters, hooks (observer + advisors), dashboard
-  mcp/      — MCP server (3 tools)
+  core/     — Detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks, research gateway
+  cli/      — Commander CLI (13 commands), formatters, hooks (observer + advisors incl. research), dashboard
+  mcp/      — MCP server (7 tools)
+scripts/
+  install.sh — turnkey installer (prerequisites + build + setup)
+skills/
+  research/  — concise research-gateway usage skill
 ```
 
 - **Monorepo** managed with pnpm workspaces

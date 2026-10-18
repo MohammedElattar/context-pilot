@@ -16,6 +16,8 @@ import {
   getSessionFileWrites,
   getCavemanTokenStats,
   getCavemanSessionStats,
+  getSessionCost,
+  getResearchSummary,
   resetTelemetry,
 } from '@contextpilot/core';
 import type Database from 'better-sqlite3';
@@ -135,7 +137,16 @@ async function handleApi(path: string, method: string): Promise<unknown> {
         Promise.resolve(loadConfig()),
         Promise.resolve(getCavemanTokenStats()),
       ]);
-      return { sessions, tokens, tools, proxy, mode: config.mode, cavemanStats };
+      const cost = queryDb(db => {
+        const row = db.prepare('SELECT id FROM sessions ORDER BY started_at DESC LIMIT 1').get() as any;
+        if (!row?.id) return null;
+        const c = getSessionCost(row.id, db);
+        return {
+          estimated: c.estimated ? { usd: c.estimated.usd, model: c.estimated.modelId, partial: c.estimated.partial, kind: 'estimated' } : null,
+          billed: c.billed ? { usd: c.billed.usd, source: c.billed.source, kind: 'billed' } : null,
+        };
+      }, null);
+      return { sessions, tokens, tools, proxy, mode: config.mode, cavemanStats, cost };
     }
     case '/api/file-reads': {
       const latestSession = queryDb(db => {
@@ -159,17 +170,39 @@ async function handleApi(path: string, method: string): Promise<unknown> {
         files: getSessionFileWrites(latestSession2, db),
       }), { session_id: latestSession2, files: [] });
     }
+    case '/api/research':
+      // null = aggregate across all sessions (gateway calls span sessions).
+      return queryDb(db => getResearchSummary(null, db), {
+        session_id: null, routed_calls: 0, cache_hits: 0, deduplicated: 0, failed_calls: 0,
+        est_tokens_in: 0, est_tokens_out: 0, est_tokens_saved: 0, cache_hit_rate: 0,
+        bypassed_native_calls: 0, routing_adoption_rate: null,
+      });
     default:
       return null;
   }
 }
 
 function sendJson(res: ServerResponse, data: unknown, status = 200) {
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-  });
+  // No wildcard CORS: the dashboard is same-origin, and telemetry should not be
+  // readable by other origins. The server also binds loopback only.
+  res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
+}
+
+const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\]|::1)$/;
+
+/**
+ * Guard state-changing requests against cross-site/DNS-rebinding abuse: the
+ * Host must be loopback, and any Origin header must also be loopback.
+ */
+function isLoopbackRequest(req: IncomingMessage): boolean {
+  const host = req.headers.host;
+  if (!host || !LOOPBACK.test(host.replace(/:\d+$/, ''))) return false;
+  const origin = req.headers.origin;
+  if (origin) {
+    try { return LOOPBACK.test(new URL(origin).hostname); } catch { return false; }
+  }
+  return true;
 }
 
 function sendHtml(res: ServerResponse, html: string) {
@@ -184,6 +217,11 @@ export async function runDashboard(opts: { port?: string }) {
     const url = new URL(req.url || '/', `http://localhost:${port}`);
 
     if (url.pathname.startsWith('/api/')) {
+      // State-changing endpoints require a loopback, same-origin request.
+      if (req.method === 'POST' && !isLoopbackRequest(req)) {
+        sendJson(res, { error: 'Forbidden: cross-origin state change rejected.' }, 403);
+        return;
+      }
       try {
         const data = await handleApi(url.pathname, req.method || 'GET');
         if (data === null) {
@@ -513,6 +551,11 @@ body {
   </div>
 </div>
 
+<div class="panel">
+  <div class="panel-header"><span class="panel-title">Research Gateway</span><span class="panel-badge" id="research-badge">0 routed</span></div>
+  <div id="research-container"><div class="empty-state">Loading...</div></div>
+</div>
+
 <div class="footer">ContextPilot v0.1.0 &middot; Local-first &middot; All data on your machine</div>
 
 <script>
@@ -548,9 +591,31 @@ function load() {
     tryFetch('/api/policies'),
     tryFetch('/api/file-reads'),
     tryFetch('/api/file-writes'),
+    tryFetch('/api/research'),
   ]).then(function(results) {
     var overview = results[0], cavemanStats = results[1], caveman = results[2];
     var policies = results[3], fileReads = results[4], fileWrites = results[5];
+    var research = results[6];
+
+    if (research) {
+      el('research-badge').textContent = (research.routed_calls || 0) + ' routed';
+      var adopt = research.routing_adoption_rate;
+      var rows = [
+        ['Routed via gateway', research.routed_calls || 0],
+        ['Bypassed (native WebFetch/WebSearch)', research.bypassed_native_calls || 0],
+        ['Routing adoption', adopt != null ? pct(adopt) : '\\u2014'],
+        ['Cache hit rate', pct(research.cache_hit_rate || 0)],
+        ['Failed calls', research.failed_calls || 0],
+        ['Est. tokens saved (within-gateway trim)', fmt(research.est_tokens_saved || 0)],
+      ];
+      var html = '<table class="data-table"><tbody>';
+      for (var i = 0; i < rows.length; i++) {
+        html += '<tr><td>' + esc(rows[i][0]) + '</td><td class="num">' + esc(String(rows[i][1])) + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      el('research-container').innerHTML = (research.routed_calls || research.bypassed_native_calls)
+        ? html : '<div class="empty-state">No research activity yet.</div>';
+    }
 
     if (overview) {
       el('mode-pill').textContent = overview.mode || 'observe';

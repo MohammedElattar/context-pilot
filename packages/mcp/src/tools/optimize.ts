@@ -6,6 +6,9 @@ import {
   readCavemanConfig,
   loadConfig,
   getRepeatedFileReadCount,
+  analyzeFileReads,
+  computeContextHealth,
+  type ContextHealth,
 } from '@contextpilot/core';
 
 export async function handleOptimize(args: { session_id?: string }) {
@@ -20,6 +23,8 @@ export async function handleOptimize(args: { session_id?: string }) {
   let toolCallCount = 0;
   let repeatedReads = 0;
   let sessionId: string | null = null;
+  let health: ContextHealth | null = null;
+  const readRecommendations: { file_path: string; reason: string; confidence: number }[] = [];
 
   if (existsSync(paths.contextPilot.db)) {
     try {
@@ -34,6 +39,10 @@ export async function handleOptimize(args: { session_id?: string }) {
           'SELECT COUNT(*) as cnt FROM events WHERE session_id = ? AND tool_name IS NOT NULL'
         ).get(sessionId) as any)?.cnt ?? 0;
         repeatedReads = getRepeatedFileReadCount(sessionId, 1, db);
+        health = computeContextHealth(sessionId, db);
+        for (const r of analyzeFileReads(sessionId, db).recommendations) {
+          readRecommendations.push({ file_path: r.file_path, reason: r.reason, confidence: r.confidence });
+        }
       }
       db.close();
     } catch { /* ignore */ }
@@ -56,6 +65,19 @@ export async function handleOptimize(args: { session_id?: string }) {
     actions.push(`${repeatedReads} file(s) read multiple times this session. Call contextpilot_session_files to identify them and avoid re-reads.`);
   }
 
+  // Evidence-backed: files re-read with an unchanged fingerprint.
+  for (const r of readRecommendations) {
+    actions.push(`${r.reason} (confidence ${(r.confidence * 100).toFixed(0)}%)`);
+  }
+
+  if (health?.score != null && health.score < 60) {
+    const worst = health.factors
+      .filter(f => f.status === 'critical' || f.status === 'warn')
+      .map(f => f.label)
+      .slice(0, 3);
+    actions.push(`Context health ${health.score}/100 (confidence ${(health.confidence * 100).toFixed(0)}%). Weakest: ${worst.join(', ') || 'n/a'}.`);
+  }
+
   if (toolCallCount > 50) {
     actions.push(`${toolCallCount} tool calls this session. Consider using /compact or splitting into smaller tasks.`);
   }
@@ -71,6 +93,8 @@ export async function handleOptimize(args: { session_id?: string }) {
     caveman_version: proxy.detected ? proxy.version : null,
     tool_call_count: toolCallCount,
     repeated_file_reads: repeatedReads,
+    context_health: health ? { score: health.score, confidence: health.confidence, missing_data: health.missing_data } : null,
+    read_recommendations: readRecommendations,
     optimization_actions: actions,
     action_count: actions.length,
   };

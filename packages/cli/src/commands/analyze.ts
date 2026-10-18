@@ -5,6 +5,9 @@ import {
   getRecentSessions,
   getTokenAggregate,
   getToolUsageStats,
+  getSessionCost,
+  getCavemanTokenStats,
+  type SessionCost,
 } from '@contextpilot/core';
 
 interface AnalyzeOptions {
@@ -22,15 +25,22 @@ export async function runAnalyze(options: AnalyzeOptions): Promise<void> {
   ]);
 
   let sessions, tokens, toolStats;
+  let cost: SessionCost | null = null;
   try {
     sessions = getRecentSessions(50);
     tokens = getTokenAggregate(sinceMs);
     toolStats = getToolUsageStats(sinceMs);
+    if (sessions.length > 0) cost = getSessionCost(sessions[0].id);
   } catch {
     sessions = [];
     tokens = { total_input: 0, total_output: 0, total_cache_read: 0, total_cache_write: 0, snapshot_count: 0 };
     toolStats = [];
   }
+  let billedUsd: number | null = null;
+  try {
+    const cstats = getCavemanTokenStats(sinceMs);
+    if (cstats && cstats.totalCostUsd > 0) billedUsd = cstats.totalCostUsd;
+  } catch { /* unavailable */ }
 
   // Caveman history analysis
   const recentHistory = history.filter(h => h.ts >= sinceMs);
@@ -66,6 +76,10 @@ export async function runAnalyze(options: AnalyzeOptions): Promise<void> {
         modeUsage: Object.fromEntries(modeUsage),
       },
       contextpilot: { tokens, toolStats, sessions: sessions.length },
+      cost: {
+        estimated: cost?.estimated ? { usd: cost.estimated.usd, model: cost.estimated.modelId, partial: cost.estimated.partial, kind: 'estimated' } : null,
+        billed: billedUsd != null ? { usd: billedUsd, source: 'caveman', kind: 'billed' } : null,
+      },
     }, null, 2));
     return;
   }
@@ -129,6 +143,17 @@ export async function runAnalyze(options: AnalyzeOptions): Promise<void> {
       }
     }
   }
+
+  // Cost
+  console.log();
+  console.log(chalk.bold('Cost'));
+  if (cost?.estimated) {
+    const partial = cost.estimated.partial ? chalk.dim(' partial') : '';
+    console.log(`  Estimated (latest session): $${cost.estimated.usd.toFixed(4)} ${chalk.dim('[estimated]')}${partial}`);
+  } else {
+    console.log(`  Estimated: ${chalk.dim('unavailable')} ${chalk.dim('[estimated]')}`);
+  }
+  console.log(`  Billed (Caveman, last ${days}d): ${billedUsd != null ? `$${billedUsd.toFixed(4)}` : chalk.dim('unavailable')} ${chalk.dim('[billed]')}`);
 
   console.log();
 }

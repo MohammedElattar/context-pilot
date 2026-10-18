@@ -4,6 +4,8 @@ import {
   readCavemanConfig,
   getRecentSessions,
   getTokenAggregate,
+  getSessionCost,
+  type SessionCost,
 } from '@contextpilot/core';
 
 interface StatusOptions {
@@ -17,16 +19,18 @@ export async function runStatus(options: StatusOptions): Promise<void> {
   ]);
 
   let sessions, tokens;
+  let cost: SessionCost | null = null;
   try {
     sessions = getRecentSessions(5);
     tokens = getTokenAggregate();
+    if (sessions.length > 0) cost = getSessionCost(sessions[0].id);
   } catch {
     sessions = [];
     tokens = { total_input: 0, total_output: 0, total_cache_read: 0, total_cache_write: 0, snapshot_count: 0 };
   }
 
   if (options.json) {
-    console.log(JSON.stringify({ proxy, caveman: cavemanConfig, sessions, tokens }, null, 2));
+    console.log(JSON.stringify({ proxy, caveman: cavemanConfig, sessions, tokens, cost }, null, 2));
     return;
   }
 
@@ -67,6 +71,19 @@ export async function runStatus(options: StatusOptions): Promise<void> {
     console.log(`  Sessions tracked: ${sessions.length}`);
     const totalEvents = sessions.reduce((sum, s) => sum + s.event_count, 0);
     console.log(`  Events recorded: ${totalEvents}`);
+  }
+
+  // Cost (latest session)
+  if (cost) {
+    console.log();
+    console.log(chalk.bold('Cost (latest session)'));
+    if (cost.estimated) {
+      const partial = cost.estimated.partial ? chalk.dim(' partial') : '';
+      console.log(`  Estimated: $${cost.estimated.usd.toFixed(4)} ${chalk.dim('[estimated]')}${partial}`);
+    } else {
+      console.log(`  Estimated: ${chalk.dim('unavailable')} ${chalk.dim('[estimated]')}`);
+    }
+    console.log(`  Billed (Caveman): ${cost.billed ? `$${cost.billed.usd.toFixed(4)}` : chalk.dim('unavailable')} ${chalk.dim('[billed]')}`);
   }
 
   // Recent sessions

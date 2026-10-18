@@ -119,7 +119,17 @@ export async function runSetup(opts: { json?: boolean; research?: boolean }) {
     results.hooks = true;
     results.messages.push('Observer + advisor hooks registered in ~/.claude/settings.local.json');
     if (opts.research) {
-      results.messages.push('Research advisory (non-blocking PreToolUse) registered. Skill at skills/research/SKILL.md.');
+      // Install the research skill into a Claude-Code-discovered location
+      // (~/.claude/skills/<name>/SKILL.md); the repo's skills/ dir is not scanned.
+      try {
+        const skillSrc = resolve(projectRoot, 'skills', 'research', 'SKILL.md');
+        const skillDestDir = resolve(paths.claude.dir, 'skills', 'research');
+        mkdirSync(skillDestDir, { recursive: true });
+        writeFileSync(resolve(skillDestDir, 'SKILL.md'), readFileSync(skillSrc, 'utf-8'));
+        results.messages.push('Research advisory registered; skill installed to ~/.claude/skills/research/SKILL.md.');
+      } catch (err) {
+        results.messages.push(`Research advisory registered; skill install failed: ${err instanceof Error ? err.message : err}`);
+      }
     }
   } catch (err) {
     results.messages.push(`Hook registration failed: ${err instanceof Error ? err.message : err}`);

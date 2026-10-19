@@ -79,6 +79,7 @@ program.command('setup')
   .description('Register ContextPilot MCP server and hooks globally')
   .option('--json', 'Output as JSON')
   .option('--research', 'Also register the non-blocking research-gateway PreToolUse advisory')
+  .option('--strict', 'Strict routing: deny native WebFetch/WebSearch (implies --research; escape with CONTEXTPILOT_ALLOW_NATIVE=1)')
   .action(wrap(runSetup));
 
 program.command('recover <handle>')

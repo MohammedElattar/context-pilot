@@ -173,7 +173,7 @@ async function handleApi(path: string, method: string): Promise<unknown> {
     case '/api/research':
       // null = aggregate across all sessions (gateway calls span sessions).
       return queryDb(db => getResearchSummary(null, db), {
-        session_id: null, routed_calls: 0, cache_hits: 0, deduplicated: 0, failed_calls: 0,
+        session_id: null, routed_calls: 0, searched: 0, cache_hits: 0, deduplicated: 0, failed_calls: 0,
         est_tokens_in: 0, est_tokens_out: 0, est_tokens_saved: 0, cache_hit_rate: 0,
         bypassed_native_calls: 0, routing_adoption_rate: null,
       });
@@ -602,6 +602,7 @@ function load() {
       var adopt = research.routing_adoption_rate;
       var rows = [
         ['Routed via gateway', research.routed_calls || 0],
+        ['Searches (contextpilot_search)', research.searched || 0],
         ['Bypassed (native WebFetch/WebSearch)', research.bypassed_native_calls || 0],
         ['Routing adoption', adopt != null ? pct(adopt) : '\\u2014'],
         ['Cache hit rate', pct(research.cache_hit_rate || 0)],

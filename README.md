@@ -18,7 +18,7 @@ ContextPilot orchestrates existing optimization tools (primarily [Caveman](https
 
 ## Quick Start
 
-Clone and run the one-command installer — it installs prerequisites (Node via nvm if missing, pnpm via corepack), installs dependencies, builds every package, and registers the MCP server + hooks + research advisory in `~/.claude`:
+Clone and run the one-command installer. It does **everything**: installs prerequisites (Node via nvm if missing, pnpm via corepack), installs dependencies, builds every package, registers the MCP server + hooks + research skill in `~/.claude`, and — if Docker is present — starts a free local SearXNG and persists `CONTEXTPILOT_SEARXNG_URL` to your shell profile so `contextpilot_search` works out of the box.
 
 ```bash
 git clone https://github.com/MohammedElattar/context-pilot.git
@@ -32,8 +32,10 @@ Installer options:
 
 ```bash
 ./scripts/install.sh                 # everything (default)
+./scripts/install.sh --strict        # also deny native WebFetch/WebSearch (force gateway routing)
+./scripts/install.sh --no-searxng    # skip local SearXNG (search falls back to native)
 ./scripts/install.sh --no-setup      # install + build only; don't touch ~/.claude
-./scripts/install.sh --no-research   # register setup without the research advisory
+./scripts/install.sh --no-research   # register setup without the research advisory/skill
 ./scripts/install.sh --no-node-install   # fail instead of auto-installing Node
 ./scripts/install.sh --test          # also run the test suite
 ./scripts/install.sh --help
@@ -100,12 +102,24 @@ After running `contextpilot setup`, these tools are available to Claude during s
 
 Reduces tokens spent on external research during bug-hunting. Instead of pulling a raw web page, doc, or GitHub thread into context, these tools fetch, extract, rank, token-budget, and cache the evidence — preserving exact error strings, stack traces, and version-specific text — and keep the full source recoverable. SSRF-guarded (private/metadata/rebinding/redirect blocks), secret-redacted, fail-open (native `WebFetch`/`WebSearch` stay as fallback).
 
-- **`contextpilot_fetch`** — Fetch one URL; returns ranked, budget-capped evidence with stable `evidence_id`s; cache-first.
-- **`contextpilot_research`** — Research a question across several URLs (web/docs and GitHub issues/PRs via `gh`); merged, ranked, budgeted with per-source provenance.
-- **`contextpilot_expand`** — Recover an omitted section or the full page by `evidence_id`, from cache, no network.
+- **`contextpilot_search`** — Open-web search → ranked result URLs + snippets (free SearXNG or Brave; falls back to native WebSearch). Feed the URLs to `contextpilot_research`.
+- **`contextpilot_fetch`** — Fetch one URL (web page, doc, or **PDF**); returns ranked, budget-capped evidence with stable `evidence_id`s; cache-first.
+- **`contextpilot_research`** — Research a question across several URLs (web/docs and GitHub issues/PRs via `gh`) in one call; merged, ranked, budgeted with per-source provenance.
+- **`contextpilot_expand`** — Recover an omitted section (or the full page, paged) by `evidence_id`, from cache, no network.
 - **`contextpilot_research_state`** — Routing adoption (gateway vs native), cache hit-rate, estimated tokens saved; shown on the dashboard's Research Gateway panel.
 
-Optional strict routing / advisory: `contextpilot setup --research` registers a non-blocking PreToolUse hint toward these tools (never blocks a call). A concise usage skill lives at `skills/research/SKILL.md`. See [`docs/research-gateway-plan.md`](docs/research-gateway-plan.md).
+Adoption: `contextpilot setup --research` registers a non-blocking PreToolUse hint toward these tools (never blocks). `contextpilot setup --research --strict` additionally **denies** native `WebFetch`/`WebSearch` so Claude routes through the gateway (escape with `CONTEXTPILOT_ALLOW_NATIVE=1`). A usage skill installs to `~/.claude/skills/research/`. See [`docs/research-gateway-plan.md`](docs/research-gateway-plan.md).
+
+### Free local search (SearXNG)
+
+`./scripts/install.sh` already starts SearXNG and persists `CONTEXTPILOT_SEARXNG_URL` when Docker is present — nothing else to do. To manage it standalone:
+
+```bash
+./scripts/searxng-up.sh      # start SearXNG on 127.0.0.1:8080 (JSON API on) + print the env var
+./scripts/searxng-down.sh    # stop it
+```
+
+Alternatively set `BRAVE_API_KEY` (free tier) to use Brave. With neither set, `contextpilot_search` returns a note to use native `WebSearch`.
 
 ## Architecture
 
@@ -113,9 +127,10 @@ Optional strict routing / advisory: `contextpilot setup --research` registers a 
 packages/
   core/     — Detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks, research gateway
   cli/      — Commander CLI (13 commands), formatters, hooks (observer + advisors incl. research), dashboard
-  mcp/      — MCP server (7 tools)
+  mcp/      — MCP server (8 tools)
 scripts/
   install.sh — turnkey installer (prerequisites + build + setup)
+  searxng-up.sh / searxng-down.sh — free local SearXNG for contextpilot_search
 skills/
   research/  — concise research-gateway usage skill
 ```

@@ -263,3 +263,21 @@ prompting fix, not a tool-reduction failure).
      stays current-session). Verified live: routed/cache/saved/bypassed/adoption
      populate from `research_ledger` + `events`. Residual `*.test` rows pruned
      (ledger back to 0 absent real usage).
+
+---
+
+# v2 — Covering the Uncovered Gaps (DONE, verified)
+
+Shipped in verify-gated slices; full suite **33 files / 157 tests**, core `tsc` clean, default vitest pool.
+
+- **WS1 — expand/over-call guardrails:** `expand mode:"full"` now windows the body (`offset`/`limit`, ~16k-char cap, `next_offset` paging) so it can't re-dump a page; `fetch`/`research` results carry a `guidance` string steering one-shot use.
+- **WS2 — PDF + content-type:** `extract.ts` parses PDFs via `unpdf` (per-page sections), fail-open on bad bytes. Verified live: a real 13 KB PDF → "Dummy PDF file".
+- **WS3 — web search:** `contextpilot_search` (new MCP tool) via `search.ts`, SearXNG-first (`CONTEXTPILOT_SEARXNG_URL`) then Brave (`BRAVE_API_KEY`) then native fallback; narrow SSRF allowance for the one configured SearXNG host. Verified live against a local SearXNG (real result URLs, over MCP stdio).
+- **WS3b — self-host SearXNG:** `scripts/searxng-up.sh` / `searxng-down.sh` + `scripts/searxng/{docker-compose.yml,settings.example.yml}` (JSON API on, loopback-only, generated secret; runtime `settings.yml` gitignored). Verified: `up.sh` brings SearXNG up and the gateway searches it.
+- **WS4 — adoption:** opt-in strict routing — `setup --research --strict` registers `research-router` (PreToolUse deny of native WebFetch/WebSearch, escape `CONTEXTPILOT_ALLOW_NATIVE=1`); hardened skill installed to `~/.claude/skills/research/`. Advisory-only remains the default.
+- **WS5 — dashboard + docs:** `/api/research` + panel add a `searched` count; README/OVERVIEW/CLAUDE/mcp README updated (8 tools, `--strict`, PDF, env vars, SearXNG scripts).
+
+Env vars: `CONTEXTPILOT_SEARXNG_URL`, `BRAVE_API_KEY`, `CONTEXTPILOT_ALLOW_NATIVE`.
+
+## Not yet done
+Live `claude -p` A/B re-measure with the hardened skill + strict mode (to quantify the adoption change) — costs tokens; run on request. New deps: `unpdf`.

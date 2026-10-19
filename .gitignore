@@ -7,3 +7,6 @@ dist/
 *.db-shm
 coverage/
 packages/*/bin/
+
+# Local SearXNG runtime config (holds a generated secret)
+scripts/searxng/settings.yml

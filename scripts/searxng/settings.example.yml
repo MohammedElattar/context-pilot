@@ -1,0 +1,15 @@
+# Template SearXNG config for ContextPilot. searxng-up.sh copies this to
+# settings.yml (gitignored) and generates a real secret into the secret_key line
+# on first run. The key line is `search.formats: json`, which exposes the JSON
+# API that contextpilot_search calls.
+use_default_settings: true
+
+server:
+  secret_key: "__SEARXNG_SECRET__"
+  bind_address: "0.0.0.0"   # inside the container; the host maps 127.0.0.1 only
+  limiter: false            # no redis; allow local JSON API without rate-limiting
+
+search:
+  formats:
+    - html
+    - json

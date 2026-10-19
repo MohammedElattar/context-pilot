@@ -94,6 +94,7 @@ export {
   isPrivateIp,
   FetchError,
   extract,
+  extractPdf,
   rankSections,
   enforceBudget,
   estimateTokens,
@@ -109,6 +110,7 @@ export {
   realGhExec,
   researchQuery,
   runResearchBenchmark,
+  searchWeb,
   type NormalizedUrl,
   type SafeFetchOptions,
   type FetchResult,
@@ -135,6 +137,9 @@ export {
   type ResearchBenchReport,
   type ResearchBenchTaskResult,
   type ArmResult,
+  type SearchResult,
+  type SearchResponse,
+  type SearchOpts,
 } from './research/index.js';
 
 export { getDb, closeDb, openReadOnly } from './db/connection.js';

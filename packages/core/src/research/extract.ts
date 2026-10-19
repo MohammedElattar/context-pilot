@@ -148,6 +148,29 @@ function fallbackStrip(body: string): Section[] {
   return text ? [{ heading: '', text, hasCode: false }] : [];
 }
 
+/**
+ * Extract text from PDF bytes via unpdf (pdf.js under the hood, no native deps),
+ * one section per page. Never throws: a corrupt/encrypted PDF returns a single
+ * note section so the caller can fail open to native tools.
+ */
+export async function extractPdf(bytes: Uint8Array, url?: string): Promise<ExtractResult> {
+  try {
+    const { getDocumentProxy, extractText } = await import('unpdf');
+    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+    const { text } = await extractText(pdf, { mergePages: false });
+    const pages: string[] = Array.isArray(text) ? text : [String(text ?? '')];
+    const sections: Section[] = pages
+      .map((t, i) => ({ heading: `Page ${i + 1}`, text: String(t ?? '').trim(), hasCode: false }))
+      .filter(s => s.text.length > 0);
+    if (sections.length === 0) {
+      return { title: '', sections: [{ heading: '', text: '(PDF had no extractable text — it may be scanned/image-only.)', hasCode: false }] };
+    }
+    return { title: url ? url.split('/').pop() ?? '' : '', sections };
+  } catch {
+    return { title: '', sections: [{ heading: '', text: '(Could not parse this PDF; use native WebFetch for it.)', hasCode: false }] };
+  }
+}
+
 function extractNonHtml(body: string, ct: string): ExtractResult {
   if (ct.includes('json')) {
     return { title: '', sections: [{ heading: '', text: body.trim(), hasCode: true }] };

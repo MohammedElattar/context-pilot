@@ -25,12 +25,13 @@ MCP tools (available to Claude after `contextpilot setup`):
 - `contextpilot_budget` — session token budget summary with policy warnings
 - `contextpilot_session_files` — per-file read counts to avoid re-reads
 - `contextpilot_optimize` — prioritized optimization actions
-- `contextpilot_fetch` — fetch one URL as ranked, budget-capped, cached research evidence (stable `evidence_id`s)
+- `contextpilot_search` — open-web search → ranked result URLs + snippets (SearXNG / Brave / native fallback)
+- `contextpilot_fetch` — fetch one URL (web/doc/PDF) as ranked, budget-capped, cached research evidence (stable `evidence_id`s)
 - `contextpilot_research` — research a question across URLs (web/docs + GitHub issues/PRs via `gh`), merged/ranked/budgeted
-- `contextpilot_expand` — recover an omitted section or full page by `evidence_id` from cache (no network)
+- `contextpilot_expand` — recover an omitted section or full page (paged) by `evidence_id` from cache (no network)
 - `contextpilot_research_state` — gateway routing adoption, cache hit-rate, estimated tokens saved
 
-Research Gateway (`packages/core/src/research/`): SSRF-safe fetch (private/metadata/rebinding/redirect guards, undici fallback transport), Readability extraction (verbatim code/errors), focused ranking, token budget, SQLite cache (TTL + content-hash dedup) + evidence ledger, GitHub provider via `gh`/API. Fail-open, secret-redacted. Non-blocking PreToolUse advisory via `contextpilot setup --research`; usage skill at `skills/research/SKILL.md`. One-command install: `./scripts/install.sh`.
+Research Gateway (`packages/core/src/research/`): SSRF-safe fetch (private/metadata/rebinding/redirect guards, undici fallback transport, opt-in private-host allowance for a configured SearXNG), Readability + PDF (`unpdf`) extraction (verbatim code/errors), focused ranking, token budget, expand paging cap, SQLite cache (TTL + content-hash dedup) + evidence ledger, GitHub provider via `gh`/API, web-search provider (SearXNG-first via `CONTEXTPILOT_SEARXNG_URL`, else `BRAVE_API_KEY`). Fail-open, secret-redacted. Non-blocking advisory via `contextpilot setup --research`; opt-in strict routing (deny native WebFetch/WebSearch, escape `CONTEXTPILOT_ALLOW_NATIVE=1`) via `--strict`. Usage skill installs to `~/.claude/skills/research/`. Free local search: `./scripts/searxng-up.sh`. One-command install: `./scripts/install.sh`.
 
 Observer hook script at `packages/cli/dist/hooks/observer.js` records events to `~/.context-pilot/telemetry.db`.
 
@@ -40,7 +41,7 @@ Observer hook script at `packages/cli/dist/hooks/observer.js` records events to 
 packages/
   core/     — detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks
   cli/      — commander CLI (13 commands), formatters, hooks (observer + advisors), dashboard
-  mcp/      — MCP server (7 tools: budget, session_files, optimize, fetch, research, expand, research_state)
+  mcp/      — MCP server (8 tools: budget, session_files, optimize, search, fetch, research, expand, research_state)
 docs/       — research findings
 ```
 

@@ -1,0 +1,13 @@
+# Local SearXNG for the ContextPilot research gateway (free, private, no API key).
+# Bound to loopback only. Started/stopped via ../searxng-up.sh / ../searxng-down.sh.
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: contextpilot-searxng
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    restart: unless-stopped

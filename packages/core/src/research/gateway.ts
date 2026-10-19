@@ -1,6 +1,6 @@
 import { normalizeUrl, hashString } from './normalize.js';
 import { safeFetch, FetchError, type FetchResult } from './fetch.js';
-import { extract, type Section } from './extract.js';
+import { extract, extractPdf, type Section } from './extract.js';
 import { rankSections } from './rank.js';
 import { enforceBudget, estimateTokens } from './budget.js';
 import { redactSecrets } from './redact.js';
@@ -60,11 +60,14 @@ export type ResearchResult =
       /** Highest-ranked omitted sections only (capped); full set recoverable via expand. */
       omitted: { evidence_id: string; heading: string; est_tokens: number }[];
       omitted_count: number;
+      /** How to use this result efficiently (keeps the model from over-calling). */
+      guidance: string;
       notes: string[];
     }
   | { ok: false; error: string; code: string; fallback: string };
 
 const FALLBACK = 'Native WebFetch/WebSearch remain available as a fallback.';
+const GUIDANCE = 'This is the ranked, budget-capped evidence for your focus. Answer from it directly. Expand a specific evidence_id only if a needed detail is missing — do not re-fetch this URL or expand every omitted section.';
 
 function clampBudget(n?: number): number {
   if (!n || !Number.isFinite(n) || n <= 0) return DEFAULT_BUDGET_TOKENS;
@@ -157,9 +160,20 @@ async function runFetch(args: FetchResearchArgs, db: Database.Database): Promise
     return { ok: false, error: `Upstream returned HTTP ${fetched.status}`, code: `http_${fetched.status}`, fallback: FALLBACK };
   }
 
-  const safeBody = redactSecrets(fetched.body);
+  // PDF → extract from raw bytes (the utf-8 body would be corrupt); the cache
+  // body then holds the extracted text so expand returns readable content.
+  const isPdf = /pdf/i.test(fetched.contentType) || /\.pdf($|\?)/i.test(norm.normalized);
+  let safeBody: string;
+  let extracted;
+  if (isPdf) {
+    const bytes = fetched.bodyBytes ?? Buffer.from(fetched.body, 'utf-8');
+    extracted = await extractPdf(bytes, fetched.finalUrl);
+    safeBody = redactSecrets(extracted.sections.map(s => s.text).join('\n\n'));
+  } else {
+    safeBody = redactSecrets(fetched.body);
+    extracted = extract({ body: safeBody, contentType: fetched.contentType, url: fetched.finalUrl });
+  }
   const contentHash = hashString(safeBody);
-  const extracted = extract({ body: safeBody, contentType: fetched.contentType, url: fetched.finalUrl });
 
   // Content-hash dedup: has this exact content been cached under another URL?
   let deduplicated = false;
@@ -253,6 +267,7 @@ function buildResult(input: {
       est_tokens: estimateTokens(s.text),
     })),
     omitted_count: omitted.length,
+    guidance: GUIDANCE,
     notes,
   };
 }
@@ -260,17 +275,41 @@ function buildResult(input: {
 export interface ExpandArgs {
   evidence_id: string;
   mode?: 'section' | 'full';
+  /** mode:"full" only — start character offset into the page body (default 0). */
+  offset?: number;
+  /** mode:"full" only — max characters to return in this window (default cap). */
+  limit?: number;
   db?: Database.Database;
 }
 
 export type ExpandResult =
-  | { ok: true; evidence_id: string; mode: 'section' | 'full'; heading: string; text: string; est_tokens: number; source: { normalized_url: string; final_url: string } }
+  | {
+      ok: true;
+      evidence_id: string;
+      mode: 'section' | 'full';
+      heading: string;
+      text: string;
+      est_tokens: number;
+      /** mode:"full": true when the body was windowed and more remains. */
+      truncated?: boolean;
+      /** mode:"full": pass this as `offset` to read the next window. */
+      next_offset?: number;
+      /** mode:"full": total characters in the full body. */
+      total_chars?: number;
+      source: { normalized_url: string; final_url: string };
+    }
   | { ok: false; error: string; code: string; fallback: string };
+
+// Windowing cap for mode:"full" so a single expand cannot dump a whole large
+// page back into context (~4,000 est tokens). Page over the cap → paged via
+// offset/next_offset. Keeps expand from undoing the budget trim.
+const EXPAND_FULL_CHAR_CAP = 16_000;
 
 /**
  * Recover omitted or fuller evidence by stable id — cache-only, never a network
- * request. 'section' returns the full stored section; 'full' returns the entire
- * original (redacted) page body.
+ * request. 'section' returns the full stored section; 'full' returns a windowed
+ * slice of the original (redacted) page body, capped and paged so it cannot
+ * re-balloon context.
  */
 export function expandEvidence(args: ExpandArgs): ExpandResult {
   const db = args.db ?? getDb();
@@ -286,10 +325,16 @@ export function expandEvidence(args: ExpandArgs): ExpandResult {
   };
 
   if (mode === 'full') {
-    const body = entry?.body ?? ev.text;
+    const body = redactSecrets(entry?.body ?? ev.text);
+    const offset = Math.max(0, Math.floor(args.offset ?? 0));
+    const cap = args.limit && args.limit > 0 ? Math.floor(args.limit) : EXPAND_FULL_CHAR_CAP;
+    const slice = body.slice(offset, offset + cap);
+    const truncated = offset + cap < body.length;
     return {
       ok: true, evidence_id: args.evidence_id, mode, heading: ev.heading ?? '',
-      text: redactSecrets(body), est_tokens: estimateTokens(body), source,
+      text: slice, est_tokens: estimateTokens(slice),
+      truncated, next_offset: truncated ? offset + cap : undefined, total_chars: body.length,
+      source,
     };
   }
   return {

@@ -46,7 +46,7 @@ ContextPilot gives you one place to inspect, measure, and act on all of that —
 - **`contextpilot_budget`** — session token budget summary with policy warnings.
 - **`contextpilot_session_files`** — per-file read counts so Claude can avoid re-reading files already in context.
 - **`contextpilot_optimize`** — prioritized optimization actions.
-- **`contextpilot_fetch`** / **`contextpilot_research`** / **`contextpilot_expand`** / **`contextpilot_research_state`** — the Research Gateway (below).
+- **`contextpilot_search`** / **`contextpilot_fetch`** / **`contextpilot_research`** / **`contextpilot_expand`** / **`contextpilot_research_state`** — the Research Gateway (below).
 
 ### Research Gateway
 
@@ -81,7 +81,7 @@ A web UI on port `3141` for live telemetry, with a Reset button to clear telemet
 packages/
   core/   — detection, adapters, DB, Zod schemas, paths, policy engine, benchmarks
   cli/    — commander CLI (13 commands), formatters, hooks (observer + advisors), dashboard
-  mcp/    — MCP server (budget, session_files, optimize, fetch, research, expand, research_state)
+  mcp/    — MCP server (budget, session_files, optimize, search, fetch, research, expand, research_state)
 docs/     — research findings
 ```
 

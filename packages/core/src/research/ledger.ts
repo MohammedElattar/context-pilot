@@ -56,6 +56,7 @@ export function resolveLatestSession(db: Database.Database = getDb()): string | 
 export interface ResearchSummary {
   session_id: string | null;
   routed_calls: number;
+  searched: number;
   cache_hits: number;
   deduplicated: number;
   failed_calls: number;
@@ -76,7 +77,7 @@ export interface ResearchSummary {
  */
 export function getResearchSummary(sessionId?: string | null, db: Database.Database = getDb()): ResearchSummary {
   const empty: ResearchSummary = {
-    session_id: sessionId ?? null, routed_calls: 0, cache_hits: 0, deduplicated: 0,
+    session_id: sessionId ?? null, routed_calls: 0, searched: 0, cache_hits: 0, deduplicated: 0,
     failed_calls: 0, est_tokens_in: 0, est_tokens_out: 0, est_tokens_saved: 0,
     cache_hit_rate: 0, bypassed_native_calls: 0, routing_adoption_rate: null,
   };
@@ -90,6 +91,7 @@ export function getResearchSummary(sessionId?: string | null, db: Database.Datab
     const r = db.prepare(`
       SELECT
         COUNT(*) AS routed,
+        COALESCE(SUM(CASE WHEN tool = 'contextpilot_search' THEN 1 ELSE 0 END), 0) AS searched,
         COALESCE(SUM(cache_hit), 0) AS hits,
         COALESCE(SUM(deduplicated), 0) AS dups,
         COALESCE(SUM(CASE WHEN ok = 0 THEN 1 ELSE 0 END), 0) AS failed,
@@ -110,6 +112,7 @@ export function getResearchSummary(sessionId?: string | null, db: Database.Datab
     return {
       session_id: sid,
       routed_calls: routed,
+      searched: r?.searched ?? 0,
       cache_hits: r?.hits ?? 0,
       deduplicated: r?.dups ?? 0,
       failed_calls: r?.failed ?? 0,

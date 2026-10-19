@@ -87,6 +87,18 @@ describe('research gateway (Slice 1)', () => {
     expect(r2.source.deduplicated).toBe(true);
   });
 
+  it('routes application/pdf through the PDF extractor and fails open on bad bytes', async () => {
+    const url = track('https://doc.test/manual.pdf');
+    const impl = async (u: string): Promise<FetchResult> => ({
+      finalUrl: u, status: 200, contentType: 'application/pdf',
+      body: 'garbage', bodyBytes: Buffer.from('%PDF-1.4 not really'), bytes: 19, truncated: false,
+    });
+    const res = await fetchResearch({ url, fetchImpl: impl });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.evidence.length).toBeGreaterThanOrEqual(1); // note section, no throw
+  });
+
   it('handles malformed HTML without throwing', async () => {
     const url = track('https://bad.test/x');
     const res = await fetchResearch({ url, fetchImpl: fakeFetcher('<div><p>Broken <b>unclosed <pre>trace\n at x</pre>') });
@@ -131,6 +143,32 @@ describe('research gateway (Slice 1)', () => {
     await new Promise(r => setTimeout(r, 10));
     const full = expandEvidence({ evidence_id: res.evidence[0].evidence_id, mode: 'full' });
     expect(full.ok).toBe(true); // recoverable despite TTL expiry
+  });
+
+  it('includes usage guidance in the result', async () => {
+    const url = track('https://guidance.test/doc');
+    const res = await fetchResearch({ url, fetchImpl: fakeFetcher(html(3)) });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.guidance).toMatch(/expand a specific evidence_id/i);
+  });
+
+  it('caps and pages mode:"full" expand so it cannot dump a whole large page', async () => {
+    const url = track('https://big-full.test/doc');
+    const res = await fetchResearch({ url, focus: 'section', budget_tokens: 100, fetchImpl: fakeFetcher(html(60)) });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const id = res.evidence[0].evidence_id;
+    const first = expandEvidence({ evidence_id: id, mode: 'full', limit: 500 });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.text.length).toBeLessThanOrEqual(500);
+    expect(first.truncated).toBe(true);
+    expect(first.next_offset).toBe(500);
+    const second = expandEvidence({ evidence_id: id, mode: 'full', offset: first.next_offset, limit: 500 });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.text).not.toBe(first.text); // different window
   });
 
   it('expands an omitted section and the full body by stable id, no network', async () => {

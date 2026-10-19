@@ -9,7 +9,8 @@
 | `contextpilot_budget` | Session token budget summary with policy warnings |
 | `contextpilot_session_files` | Per-file read counts, to help avoid re-reading files |
 | `contextpilot_optimize` | Prioritized optimization actions for the current session |
-| `contextpilot_fetch` | Fetch one URL as ranked, budget-capped, cached evidence with stable `evidence_id`s |
+| `contextpilot_search` | Open-web search → ranked result URLs + snippets (SearXNG / Brave / native fallback) |
+| `contextpilot_fetch` | Fetch one URL (web/doc/PDF) as ranked, budget-capped, cached evidence with stable `evidence_id`s |
 | `contextpilot_research` | Research a question across several URLs (web/docs + GitHub issues/PRs); merged, ranked, budgeted |
 | `contextpilot_expand` | Recover an omitted section or the full page by `evidence_id`, from cache, no network |
 | `contextpilot_research_state` | Routing adoption, cache hit-rate, and estimated tokens saved for the session |

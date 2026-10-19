@@ -10,6 +10,12 @@ export interface SafeFetchOptions {
   maxRedirects?: number;
   /** Extra request headers (never include credentials). */
   headers?: Record<string, string>;
+  /**
+   * Hostname that may resolve to a private/loopback address without being
+   * blocked — ONLY for a user-configured endpoint (e.g. a self-hosted SearXNG).
+   * The private-IP guard still applies to every other host and every redirect.
+   */
+  allowPrivateHost?: string;
 }
 
 export interface FetchResult {
@@ -17,6 +23,8 @@ export interface FetchResult {
   status: number;
   contentType: string;
   body: string;
+  /** Raw (undecoded) bytes — needed for binary content such as PDF. */
+  bodyBytes?: Buffer;
   bytes: number;
   /** True when the body hit maxBytes and was cut off. */
   truncated: boolean;
@@ -74,16 +82,18 @@ function isPrivateV6(ip: string): boolean {
  * back a validated address — so the address that is connected to is the same
  * one that was checked (no DNS-rebinding TOCTOU gap).
  */
-function guardedLookup(hostname: string, options: any, cb: any): void {
+function guardedLookup(hostname: string, options: any, cb: any, allowPrivate = false): void {
   const callback = typeof options === 'function' ? options : cb;
   dnsLookup(hostname, { all: true, verbatim: true }, (err, addresses: LookupAddress[]) => {
     if (err) return callback(err);
     if (!addresses || addresses.length === 0) {
       return callback(new FetchError(`DNS returned no address for ${hostname}`, 'dns_empty'));
     }
-    for (const a of addresses) {
-      if (isPrivateIp(a.address)) {
-        return callback(new FetchError(`Blocked private address ${a.address} for ${hostname}`, 'ssrf_blocked'));
+    if (!allowPrivate) {
+      for (const a of addresses) {
+        if (isPrivateIp(a.address)) {
+          return callback(new FetchError(`Blocked private address ${a.address} for ${hostname}`, 'ssrf_blocked'));
+        }
       }
     }
     // Prefer a validated IPv4 address: pinning one address defeats Node's
@@ -94,9 +104,10 @@ function guardedLookup(hostname: string, options: any, cb: any): void {
 }
 
 /** Resolve a hostname and reject if any address is private (DNS pre-validation). */
-function assertHostPublic(hostname: string): Promise<void> {
+function assertHostPublic(hostname: string, allowPrivate = false): Promise<void> {
   // An IP literal is validated synchronously by assertSafeUrl; skip DNS.
   if (isIP(hostname.replace(/^\[|\]$/g, ''))) return Promise.resolve();
+  if (allowPrivate) return Promise.resolve();
   return new Promise((resolve, reject) => {
     dnsLookup(hostname, { all: true, verbatim: true }, (err, addresses: LookupAddress[]) => {
       if (err) return reject(new FetchError(err.message, 'dns'));
@@ -109,16 +120,17 @@ function assertHostPublic(hostname: string): Promise<void> {
   });
 }
 
-function assertSafeUrl(u: URL): void {
+function assertSafeUrl(u: URL, allowPrivateHost?: string): void {
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
     throw new FetchError(`Blocked non-http(s) scheme: ${u.protocol}`, 'bad_scheme');
   }
+  const bare = u.hostname.replace(/^\[|\]$/g, '');
+  // User-opted-in endpoint (e.g. self-hosted SearXNG) may be private.
+  if (allowPrivateHost && (u.hostname === allowPrivateHost || bare === allowPrivateHost)) return;
   // Reject a literal private IP host up front (lookup is skipped for literals).
   if (isIP(u.hostname) && isPrivateIp(u.hostname)) {
     throw new FetchError(`Blocked private host: ${u.hostname}`, 'ssrf_blocked');
   }
-  // Bracketed IPv6 literal.
-  const bare = u.hostname.replace(/^\[|\]$/g, '');
   if (isIP(bare) && isPrivateIp(bare)) {
     throw new FetchError(`Blocked private host: ${u.hostname}`, 'ssrf_blocked');
   }
@@ -139,17 +151,18 @@ export function safeFetch(rawUrl: string, options: SafeFetchOptions = {}): Promi
       let u: URL;
       try {
         u = new URL(current);
-        assertSafeUrl(u);
+        assertSafeUrl(u, options.allowPrivateHost);
       } catch (err) {
         return reject(err instanceof FetchError ? err : new FetchError(`Invalid URL: ${current}`, 'bad_url'));
       }
 
+      const allowPrivate = !!options.allowPrivateHost && u.hostname === options.allowPrivateHost;
       const mod = u.protocol === 'https:' ? https : http;
       const req = mod.request(
         u,
         {
           method: 'GET',
-          lookup: guardedLookup as any,
+          lookup: ((h: string, o: any, c: any) => guardedLookup(h, o, c, allowPrivate)) as any,
           headers: {
             'user-agent': 'ContextPilot-ResearchGateway/0.1 (+local)',
             accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.8',
@@ -193,13 +206,14 @@ export function safeFetch(rawUrl: string, options: SafeFetchOptions = {}): Promi
           const finish = () => {
             if (done) return;
             done = true;
-            const body = Buffer.concat(chunks).toString('utf-8');
+            const buf = Buffer.concat(chunks);
             resolve({
               finalUrl: u.toString(),
               status,
               contentType: String(res.headers['content-type'] ?? ''),
-              body,
-              bytes: Buffer.byteLength(body),
+              body: buf.toString('utf-8'),
+              bodyBytes: buf,
+              bytes: buf.length,
               truncated,
             });
           };
@@ -221,7 +235,7 @@ export function safeFetch(rawUrl: string, options: SafeFetchOptions = {}): Promi
     // block, which must stay blocked.
     const code = err instanceof FetchError ? err.code : 'network';
     if (code === 'timeout' || code === 'network' || code === 'dns' || code === 'dns_empty') {
-      return fetchViaUndici(rawUrl, { maxBytes, timeoutMs, maxRedirects, headers: options.headers });
+      return fetchViaUndici(rawUrl, { maxBytes, timeoutMs, maxRedirects, headers: options.headers, allowPrivateHost: options.allowPrivateHost });
     }
     throw err;
   });
@@ -235,16 +249,16 @@ export function safeFetch(rawUrl: string, options: SafeFetchOptions = {}): Promi
  * window; acceptable for the public docs/GitHub this gateway targets, and each
  * redirect hop is re-validated.
  */
-async function fetchViaUndici(rawUrl: string, options: Required<Pick<SafeFetchOptions, 'maxBytes' | 'timeoutMs' | 'maxRedirects'>> & { headers?: Record<string, string> }): Promise<FetchResult> {
+async function fetchViaUndici(rawUrl: string, options: Required<Pick<SafeFetchOptions, 'maxBytes' | 'timeoutMs' | 'maxRedirects'>> & { headers?: Record<string, string>; allowPrivateHost?: string }): Promise<FetchResult> {
   const attempt = async (current: string, hops: number): Promise<FetchResult> => {
     let u: URL;
     try {
       u = new URL(current);
-      assertSafeUrl(u);
+      assertSafeUrl(u, options.allowPrivateHost);
     } catch (err) {
       throw err instanceof FetchError ? err : new FetchError(`Invalid URL: ${current}`, 'bad_url');
     }
-    await assertHostPublic(u.hostname);
+    await assertHostPublic(u.hostname, !!options.allowPrivateHost && u.hostname === options.allowPrivateHost);
 
     const res = await fetch(u, {
       method: 'GET',
@@ -287,13 +301,14 @@ async function fetchViaUndici(rawUrl: string, options: Required<Pick<SafeFetchOp
         chunks.push(value);
       }
     }
-    const body = Buffer.concat(chunks.map(c => Buffer.from(c))).toString('utf-8');
+    const buf = Buffer.concat(chunks.map(c => Buffer.from(c)));
     return {
       finalUrl: u.toString(),
       status: res.status,
       contentType: res.headers.get('content-type') ?? '',
-      body,
-      bytes: Buffer.byteLength(body),
+      body: buf.toString('utf-8'),
+      bodyBytes: buf,
+      bytes: buf.length,
       truncated,
     };
   };

@@ -36,8 +36,11 @@ export interface ResearchQueryResult {
   omitted: { evidence_id: string; source_url: string; heading: string; est_tokens: number }[];
   omitted_count: number;
   budget: { configured_tokens: number; est_tokens_available: number; est_tokens_out: number };
+  guidance: string;
   notes: string[];
 }
+
+const GUIDANCE = 'Merged, ranked, budget-capped evidence across the sources. Answer from it directly; expand a specific evidence_id only for a missing detail — do not re-run research on the same URLs.';
 
 function clampBudget(n?: number): number {
   if (!n || !Number.isFinite(n) || n <= 0) return DEFAULT_BUDGET;
@@ -61,6 +64,7 @@ export async function researchQuery(args: ResearchQueryArgs): Promise<ResearchQu
   const base: ResearchQueryResult = {
     ok: true, query, sources: [], evidence: [], omitted: [], omitted_count: 0,
     budget: { configured_tokens: budget, est_tokens_available: 0, est_tokens_out: 0 },
+    guidance: GUIDANCE,
     notes: [],
   };
 

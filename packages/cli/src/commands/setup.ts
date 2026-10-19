@@ -21,7 +21,9 @@ function findProjectRoot(): string {
   return process.cwd();
 }
 
-export async function runSetup(opts: { json?: boolean; research?: boolean }) {
+export async function runSetup(opts: { json?: boolean; research?: boolean; strict?: boolean }) {
+  // Strict routing implies the research setup (advisor + skill + router).
+  if (opts.strict) opts = { ...opts, research: true };
   const results: { mcp: boolean; hooks: boolean; messages: string[] } = {
     mcp: false, hooks: false, messages: [],
   };
@@ -111,6 +113,19 @@ export async function runSetup(opts: { json?: boolean; research?: boolean }) {
       );
       if (!ptuRegistered) {
         settings.hooks['PreToolUse'] = [...ptuExisting, ...hookEntry(researchCmd, 3)];
+      }
+
+      // Strict routing (opt-in): a PreToolUse hook that DENIES native
+      // WebFetch/WebSearch. Escape with CONTEXTPILOT_ALLOW_NATIVE=1.
+      if (opts.strict) {
+        const routerCmd = `node ${resolve(hookBase, 'research-router.js')}`;
+        const current = settings.hooks['PreToolUse'] ?? [];
+        const routerRegistered = current.some((g: any) =>
+          g.hooks?.some((h: any) => h.command?.includes('research-router'))
+        );
+        if (!routerRegistered) {
+          settings.hooks['PreToolUse'] = [...current, ...hookEntry(routerCmd, 3)];
+        }
       }
     }
 

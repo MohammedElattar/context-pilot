@@ -13,6 +13,7 @@ import { handleResearchFetch } from './tools/research-fetch.js';
 import { handleResearchExpand } from './tools/research-expand.js';
 import { handleResearchState } from './tools/research-state.js';
 import { handleResearch } from './tools/research.js';
+import { handleResearchSearch } from './tools/research-search.js';
 
 const server = new Server(
   { name: 'contextpilot', version: '0.1.0' },
@@ -53,6 +54,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'contextpilot_search',
+      description: 'Open-web search that returns ranked result URLs + short snippets (not page bodies) via a free self-hosted SearXNG (CONTEXTPILOT_SEARXNG_URL) or Brave (BRAVE_API_KEY). If neither is configured it returns a note to use native WebSearch. Feed the chosen URLs to contextpilot_research to read them under a token budget.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          query: { type: 'string', description: 'The search query.' },
+          limit: { type: 'number', description: 'Max results (default 8, max 20).' },
+        },
+        required: ['query'],
+      },
+    },
+    {
       name: 'contextpilot_research',
       description: 'Research a question across one or more URLs you provide (web/doc pages and GitHub issue/PR URLs or owner/repo#n) in a single call. Fetches each through the gateway, merges and ranks the evidence under one token budget with per-source provenance, long GitHub threads compacted. For open-web discovery first use native WebSearch, then pass the URLs here. Recover omitted evidence with contextpilot_expand.',
       inputSchema: {
@@ -86,6 +99,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           evidence_id: { type: 'string', description: 'The evidence_id returned by contextpilot_fetch.' },
           mode: { type: 'string', enum: ['section', 'full'], description: 'section (default) or full.' },
+          offset: { type: 'number', description: 'mode:"full" only — start character offset (for paging; use next_offset from a prior call).' },
+          limit: { type: 'number', description: 'mode:"full" only — max characters this window (default ~16000).' },
         },
         required: ['evidence_id'],
       },
@@ -117,6 +132,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'contextpilot_optimize':
         result = await handleOptimize(args as any ?? {});
+        break;
+      case 'contextpilot_search':
+        result = await handleResearchSearch(args as any ?? {});
         break;
       case 'contextpilot_research':
         result = await handleResearch(args as any ?? {});

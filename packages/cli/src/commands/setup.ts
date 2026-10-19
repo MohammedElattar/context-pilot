@@ -3,6 +3,17 @@ import { resolve, dirname, join } from 'node:path';
 import chalk from 'chalk';
 import { paths } from '@contextpilot/core';
 
+const ROUTING_MARKER = '<!-- contextpilot:research-routing -->';
+const ROUTING_BLOCK = `${ROUTING_MARKER}
+## Research routing (ContextPilot)
+
+For external research (web pages, docs, GitHub issues/PRs, PDFs), prefer the ContextPilot MCP tools over native \`WebFetch\`/\`WebSearch\`:
+
+- Discover with \`contextpilot_search\`, then read URLs with \`contextpilot_research\` (several URLs or a GitHub issue/PR in one call) or \`contextpilot_fetch\` (a single URL). Pass the error text or question as \`focus\`/\`query\`.
+- Recover an omitted detail with \`contextpilot_expand({ evidence_id })\` — do not re-fetch the same URL or loop fetch→expand.
+- They return ranked, token-budgeted, cached evidence with exact errors preserved. If a gateway call returns \`ok:false\`, fall back to the native tool.
+<!-- /contextpilot:research-routing -->`;
+
 function findProjectRoot(): string {
   // Try from import.meta.url first, then cwd
   const candidates = [
@@ -144,6 +155,25 @@ export async function runSetup(opts: { json?: boolean; research?: boolean; stric
         results.messages.push('Research advisory registered; skill installed to ~/.claude/skills/research/SKILL.md.');
       } catch (err) {
         results.messages.push(`Research advisory registered; skill install failed: ${err instanceof Error ? err.message : err}`);
+      }
+
+      // Proactive routing: add a research-routing block to the user-level
+      // ~/.claude/CLAUDE.md so Claude prefers the gateway before trying native
+      // tools, in every project. Idempotent via a marker; appends if the file
+      // exists, creates it otherwise.
+      try {
+        const claudeMd = resolve(paths.claude.dir, 'CLAUDE.md');
+        const existing = existsSync(claudeMd) ? readFileSync(claudeMd, 'utf-8') : '';
+        if (existing.includes(ROUTING_MARKER)) {
+          results.messages.push('Research routing already present in ~/.claude/CLAUDE.md.');
+        } else {
+          mkdirSync(dirname(claudeMd), { recursive: true });
+          const prefix = existing && !existing.endsWith('\n') ? '\n\n' : existing ? '\n' : '';
+          writeFileSync(claudeMd, existing + prefix + ROUTING_BLOCK + '\n');
+          results.messages.push(`Research routing ${existing ? 'appended to' : 'written to'} ~/.claude/CLAUDE.md.`);
+        }
+      } catch (err) {
+        results.messages.push(`Research routing install failed: ${err instanceof Error ? err.message : err}`);
       }
     }
   } catch (err) {

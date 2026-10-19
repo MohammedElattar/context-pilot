@@ -18,7 +18,7 @@ ContextPilot orchestrates existing optimization tools (primarily [Caveman](https
 
 ## Quick Start
 
-Clone and run the one-command installer. It does **everything**: installs prerequisites (Node via nvm if missing, pnpm via corepack), installs dependencies, builds every package, registers the MCP server + hooks + research skill in `~/.claude`, and — if Docker is present — starts a free local SearXNG and persists `CONTEXTPILOT_SEARXNG_URL` to your shell profile so `contextpilot_search` works out of the box.
+Clone and run the one-command installer. It does **everything**: installs prerequisites (Node via nvm if missing, pnpm via corepack), installs dependencies, builds every package, registers the MCP server + hooks + research skill in `~/.claude` (and adds a research-routing block to `~/.claude/CLAUDE.md` so Claude prefers the gateway automatically), and — if Docker is present — starts a free local SearXNG and persists `CONTEXTPILOT_SEARXNG_URL` to your shell profile so `contextpilot_search` works out of the box.
 
 ```bash
 git clone https://github.com/MohammedElattar/context-pilot.git

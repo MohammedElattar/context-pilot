@@ -25,8 +25,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const allowNative = process.env.CONTEXTPILOT_ALLOW_NATIVE === '1';
-  const d = routeDecision(input.tool_name, allowNative);
+  const d = routeDecision(input.tool_name, {
+    allowNative: process.env.CONTEXTPILOT_ALLOW_NATIVE === '1',
+    searxngUrl: process.env.CONTEXTPILOT_SEARXNG_URL,
+    braveKey: process.env.BRAVE_API_KEY,
+  });
   if (!d) return; // silent → call proceeds
 
   process.stdout.write(JSON.stringify({

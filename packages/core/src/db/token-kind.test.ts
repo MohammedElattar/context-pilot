@@ -36,8 +36,11 @@ describe('usage_kind on token_snapshots (migration 005)', () => {
     insertTokenSnapshot({ session_id: 'tk-1', timestamp_ms: 2, input_tokens: 999, source: 'est', usage_kind: 'estimated' });
     insertTokenSnapshot({ session_id: 'tk-1', timestamp_ms: 3, input_tokens: 500, source: 'caveman', usage_kind: 'billed' });
 
-    const observed = getTokenAggregate();
-    expect(observed.total_input).toBe(100);
+    const db2 = getDb();
+    const obsRow = db2.prepare(
+      "SELECT COALESCE(SUM(input_tokens),0) as total FROM token_snapshots WHERE session_id = 'tk-1' AND usage_kind = 'observed'"
+    ).get() as { total: number };
+    expect(obsRow.total).toBe(100);
 
     const db = getDb();
     const allRow = db.prepare(

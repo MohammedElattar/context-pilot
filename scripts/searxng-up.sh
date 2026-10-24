@@ -12,7 +12,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIR="$SCRIPT_DIR/searxng"
-URL="http://127.0.0.1:8080"
+# Default port; override with SEARXNG_PORT env var if 8080 is taken (e.g. by Burp).
+SEARXNG_PORT="${SEARXNG_PORT:-8888}"
+URL="http://127.0.0.1:$SEARXNG_PORT"
 
 die() { printf '\033[31merror: %s\033[0m\n' "$1" >&2; exit 1; }
 
@@ -22,7 +24,7 @@ elif command -v docker-compose >/dev/null 2>&1; then COMPOSE="docker-compose";
 elif podman compose version >/dev/null 2>&1; then COMPOSE="podman compose";
 else
   die "Docker (or Podman) is required. Install Docker Desktop / Docker Engine (https://docs.docker.com/get-docker/), then re-run. Manual fallback:
-  docker run -d --name contextpilot-searxng -p 127.0.0.1:8080:8080 -v \"$DIR/settings.yml:/etc/searxng/settings.yml\" searxng/searxng:latest"
+  docker run -d --name contextpilot-searxng -p 127.0.0.1:$SEARXNG_PORT:8080 -v \"$DIR/settings.yml:/etc/searxng/settings.yml\" searxng/searxng:latest"
 fi
 
 # Create the runtime config (gitignored) from the committed template on first run.
@@ -37,7 +39,8 @@ if grep -q '__SEARXNG_SECRET__' "$DIR/settings.yml"; then
   echo "Generated SearXNG secret_key."
 fi
 
-echo "Starting SearXNG ..."
+echo "Starting SearXNG on port $SEARXNG_PORT ..."
+export SEARXNG_PORT
 ( cd "$DIR" && $COMPOSE up -d )
 
 echo "Waiting for the JSON API ..."

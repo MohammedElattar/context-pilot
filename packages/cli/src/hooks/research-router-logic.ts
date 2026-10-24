@@ -5,15 +5,28 @@ export const STRICT_REASON =
 
 export type RouterDecision = { decision: 'deny'; reason: string } | null;
 
+export interface RouterEnv {
+  allowNative: boolean;
+  searxngUrl?: string;
+  braveKey?: string;
+}
+
 /**
- * Deny native WebFetch/WebSearch so the model routes through the gateway. The
- * `CONTEXTPILOT_ALLOW_NATIVE` escape (allowNative=true) disables the block — a
- * deadlock guard for when the gateway genuinely cannot fetch. Null = stay silent
- * (do not touch the call), so a router error fails open to native.
+ * Deny native WebFetch/WebSearch so the model routes through the gateway.
+ * Fail-open: if no search backend is configured (no SearXNG URL, no Brave key),
+ * WebSearch is allowed through — blocking it would deadlock the model.
+ * WebFetch is always redirected when strict is on (the gateway can always fetch).
  */
-export function routeDecision(toolName: string | undefined, allowNative: boolean): RouterDecision {
-  if (allowNative) return null;
-  if (toolName === 'WebFetch' || toolName === 'WebSearch') {
+export function routeDecision(toolName: string | undefined, env: RouterEnv | boolean): RouterDecision {
+  const resolved: RouterEnv = typeof env === 'boolean'
+    ? { allowNative: env } : env;
+  if (resolved.allowNative) return null;
+  if (toolName === 'WebSearch') {
+    const hasBackend = !!(resolved.searxngUrl || resolved.braveKey);
+    if (!hasBackend) return null;
+    return { decision: 'deny', reason: STRICT_REASON.replace('{tool}', toolName) };
+  }
+  if (toolName === 'WebFetch') {
     return { decision: 'deny', reason: STRICT_REASON.replace('{tool}', toolName) };
   }
   return null;

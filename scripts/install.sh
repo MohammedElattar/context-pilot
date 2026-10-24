@@ -236,11 +236,12 @@ fi
 say "7/8  SearXNG (free local web search)"
 if [ "$DO_SEARXNG" -eq 1 ] && [ "$HAS_DOCKER" -eq 1 ]; then
   if "$SCRIPT_DIR/searxng-up.sh"; then
-    export CONTEXTPILOT_SEARXNG_URL="http://127.0.0.1:8080"
+    SEARXNG_PORT="${SEARXNG_PORT:-8888}"
+    export CONTEXTPILOT_SEARXNG_URL="http://127.0.0.1:$SEARXNG_PORT"
     append_to_profile "CONTEXTPILOT_SEARXNG_URL" \
       "# ContextPilot — local SearXNG for free private web search
-export CONTEXTPILOT_SEARXNG_URL=http://127.0.0.1:8080"
-    ok "SearXNG running at http://127.0.0.1:8080"
+export CONTEXTPILOT_SEARXNG_URL=http://127.0.0.1:$SEARXNG_PORT"
+    ok "SearXNG running at http://127.0.0.1:$SEARXNG_PORT"
   else
     warn "SearXNG did not start. Retry later: ./scripts/searxng-up.sh"
   fi

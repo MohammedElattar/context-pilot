@@ -53,11 +53,16 @@ export async function runSetup(opts: { json?: boolean; research?: boolean; stric
 
     if (!config.mcpServers) config.mcpServers = {};
 
+    const mcpEnv: Record<string, string> = {};
+    if (process.env.CONTEXTPILOT_SEARXNG_URL) mcpEnv.CONTEXTPILOT_SEARXNG_URL = process.env.CONTEXTPILOT_SEARXNG_URL;
+    if (process.env.BRAVE_API_KEY) mcpEnv.BRAVE_API_KEY = process.env.BRAVE_API_KEY;
+
+    const existing = config.mcpServers.contextpilot?.env ?? {};
     config.mcpServers.contextpilot = {
       type: 'stdio',
       command: 'node',
       args: [mcpBinPath],
-      env: {},
+      env: { ...existing, ...mcpEnv },
     };
 
     writeFileSync(claudeJsonPath, JSON.stringify(config, null, 2) + '\n');

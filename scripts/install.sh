@@ -238,6 +238,7 @@ if [ "$DO_SEARXNG" -eq 1 ] && [ "$HAS_DOCKER" -eq 1 ]; then
   if "$SCRIPT_DIR/searxng-up.sh"; then
     SEARXNG_PORT="${SEARXNG_PORT:-8888}"
     export CONTEXTPILOT_SEARXNG_URL="http://127.0.0.1:$SEARXNG_PORT"
+    export SEARXNG_PORT
     append_to_profile "CONTEXTPILOT_SEARXNG_URL" \
       "# ContextPilot — local SearXNG for free private web search
 export CONTEXTPILOT_SEARXNG_URL=http://127.0.0.1:$SEARXNG_PORT"

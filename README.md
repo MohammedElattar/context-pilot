@@ -8,17 +8,31 @@ Local-first token-optimization control plane for Claude Code.
 
 ContextPilot orchestrates existing optimization tools (primarily [Caveman](https://caveman.so)), provides unified telemetry, detects conflicts between tools, and automates optimization decisions. It does not duplicate Caveman's compression or recovery — it sits on top and makes them smarter.
 
+## What You Get
+
+| Feature | Description |
+|---------|-------------|
+| **Caveman integration** | Reads Caveman DB for input optimization stats, compression ratios, cache intelligence, waste findings, and per-model pricing |
+| **Token snapshots** | Observer hook populates real-time token usage from Caveman request data |
+| **Output conciseness** | Prompt advisor injects brevity directives; reread-guard warns when session output is high |
+| **Policy engine** | Triggers on high output, high context, repeated file reads, low cache ratio |
+| **Research gateway** | SSRF-safe fetch, Readability extraction, focused ranking, token budget, SQLite cache |
+| **Free local search** | SearXNG via Docker — no API key needed |
+| **Web dashboard** | Real-time panels for session stats, research gateway, token usage |
+| **30+ Caveman skills** | Full skill suite for compression, review, optimization, exploration, commits |
+
 ## Prerequisites
 
-- **Node.js** >= 20 — the installer auto-installs it via nvm (user-space) if missing
-- **pnpm** 10 — the installer enables it via corepack (npm-global fallback)
+- **Node.js** >= 20 — auto-installed via nvm if missing
+- **pnpm** 10 — auto-installed via corepack/npm
 - **Claude Code** — the CLI this tool observes and optimizes
-- **Caveman** (optional) — ContextPilot detects and integrates with it if installed, and works standalone if not
-- **`gh`** (optional) — the research gateway uses it for GitHub issues/PRs; it falls back to the public API without it
+- **Caveman** — token optimization proxy; auto-installed via `npm -g @caveman-ai/cli` if missing
+- **GitHub CLI (`gh`)** — for research gateway GitHub provider; auto-installed if missing
+- **Docker** (optional) — needed for free local SearXNG search
 
 ## Quick Start
 
-Clone and run the one-command installer. It does **everything**: installs prerequisites (Node via nvm if missing, pnpm via corepack), installs dependencies, builds every package, registers the MCP server + hooks + research skill in `~/.claude` (and adds a research-routing block to `~/.claude/CLAUDE.md` so Claude prefers the gateway automatically), and — if Docker is present — starts a free local SearXNG and persists `CONTEXTPILOT_SEARXNG_URL` to your shell profile so `contextpilot_search` works out of the box.
+One command installs **everything**: Node, pnpm, Caveman, gh, dependencies, builds all packages, registers MCP server + hooks + research skill, and starts SearXNG if Docker is present.
 
 ```bash
 git clone https://github.com/MohammedElattar/context-pilot.git
@@ -26,24 +40,41 @@ cd context-pilot
 ./scripts/install.sh
 ```
 
-Then **restart Claude Code** and verify with `node packages/cli/dist/index.js doctor`.
+Then **restart Claude Code** and verify:
 
-Installer options:
+```bash
+contextpilot doctor     # or: node packages/cli/dist/index.js doctor
+```
+
+### Installer Options
 
 ```bash
 ./scripts/install.sh                 # everything (default)
-./scripts/install.sh --strict        # also deny native WebFetch/WebSearch (force gateway routing)
-./scripts/install.sh --no-searxng    # skip local SearXNG (search falls back to native)
+./scripts/install.sh --strict        # deny native WebFetch/WebSearch (force gateway)
+./scripts/install.sh --no-searxng    # skip local SearXNG
 ./scripts/install.sh --no-setup      # install + build only; don't touch ~/.claude
-./scripts/install.sh --no-research   # register setup without the research advisory/skill
-./scripts/install.sh --no-node-install   # fail instead of auto-installing Node
+./scripts/install.sh --no-research   # setup without the research advisory/skill
+./scripts/install.sh --no-caveman    # skip Caveman install
+./scripts/install.sh --no-docker     # skip Docker check and SearXNG
+./scripts/install.sh --no-gh         # skip GitHub CLI install
+./scripts/install.sh --no-node-install   # fail if Node < 20 missing
 ./scripts/install.sh --test          # also run the test suite
 ./scripts/install.sh --help
 ```
 
-> `setup` writes `~/.claude.json` and `~/.claude/settings.local.json` (how Claude Code discovers the tool). Use `--no-setup` to skip it. The script is idempotent — safe to re-run.
+The installer covers 8 steps:
+1. **Node >= 20** via nvm (user-space, no sudo)
+2. **pnpm** via corepack or npm
+3. **Caveman** via `npm -g @caveman-ai/cli` (checks proxy + login status)
+4. **GitHub CLI** auto-install (apt/brew/dnf/pacman)
+5. **Docker** detection with install guidance
+6. **ContextPilot** deps + build
+7. **SearXNG** free local search via Docker
+8. **Setup** — MCP server, hooks, research skill in `~/.claude`
 
-### Manual install (alternative)
+> The script is idempotent — safe to re-run. It prints a summary table and next steps at the end.
+
+### Manual Install (alternative)
 
 ```bash
 pnpm install && pnpm -r build
@@ -52,16 +83,25 @@ node packages/cli/dist/index.js setup --research   # register globally
 cd packages/cli && pnpm link --global && cd ../..
 ```
 
-> Without the global link, run commands as `node packages/cli/dist/index.js <command>` instead of `contextpilot <command>`.
+### Post-Install: Start Caveman
+
+```bash
+caveman login            # free account (enables learn/cloud features)
+caveman claude           # start the optimization proxy
+```
+
+This sets `ANTHROPIC_BASE_URL=http://127.0.0.1:8787/w/claude` so all Claude requests flow through Caveman's compression layer.
 
 ### Troubleshooting
 
-- **`better-sqlite3` fails to load** — it ships a native addon. pnpm builds it automatically (allow-listed in `pnpm.onlyBuiltDependencies`). If it still fails, rebuild it:
+- **`better-sqlite3` fails to load** — rebuild the native addon:
   ```bash
   cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 && npm run build-release
   ```
-- **`contextpilot` command not found** — re-run step 4, or use the full `node packages/cli/dist/index.js` path.
-- **Hooks or MCP tools not active** — restart Claude Code after `contextpilot setup`; confirm with `contextpilot doctor`.
+- **`contextpilot` command not found** — use `node packages/cli/dist/index.js` or run `cd packages/cli && pnpm link --global`
+- **Hooks or MCP tools not active** — restart Claude Code after setup; confirm with `contextpilot doctor`
+- **Caveman proxy not running** — run `caveman claude` to start it
+- **SearXNG not working** — check Docker is running, then `./scripts/searxng-up.sh`
 
 ## Commands
 
@@ -73,7 +113,7 @@ cd packages/cli && pnpm link --global && cd ../..
 | `contextpilot tools` | Detected optimization tools, capabilities, conflicts |
 | `contextpilot report` | Comprehensive optimization report |
 | `contextpilot mode [name]` | Show or set operating mode (`observe`, `canary`, `auto`) |
-| `contextpilot benchmark` | Run token optimization benchmarks via `claude -p` (add `--research --urls <csv> --query <q> --expect <s>` for the research-gateway A/B) |
+| `contextpilot benchmark` | Run token optimization benchmarks via `claude -p` |
 | `contextpilot policies` | Evaluate optimization policies against current telemetry |
 | `contextpilot dashboard` | Local web dashboard at `http://127.0.0.1:3141` |
 | `contextpilot setup` | Register MCP server and hooks globally |
@@ -92,53 +132,114 @@ Set mode: `contextpilot mode auto`
 
 ## MCP Tools
 
-After running `contextpilot setup`, these tools are available to Claude during sessions:
+After `contextpilot setup`, these tools are available to Claude during sessions:
 
-- **`contextpilot_budget`** — Session token budget summary with policy warnings
-- **`contextpilot_session_files`** — Per-file read counts to avoid re-reads
-- **`contextpilot_optimize`** — Prioritized optimization actions
+| Tool | Description |
+|------|-------------|
+| `contextpilot_budget` | Session token budget summary with policy warnings |
+| `contextpilot_session_files` | Per-file read counts to avoid re-reads |
+| `contextpilot_optimize` | Prioritized optimization actions + Caveman waste findings |
+| `contextpilot_hunt_health` | Hunt health diagnostics |
+| `contextpilot_search` | Web search → ranked URLs + snippets (SearXNG / Brave / native) |
+| `contextpilot_fetch` | Fetch one URL as ranked, budget-capped, cached evidence |
+| `contextpilot_research` | Research across URLs + GitHub issues/PRs, merged/ranked/budgeted |
+| `contextpilot_expand` | Recover omitted sections by `evidence_id` from cache |
+| `contextpilot_research_state` | Gateway adoption, cache hit-rate, tokens saved |
 
-### Research Gateway
+## Caveman Integration
 
-Reduces tokens spent on external research during bug-hunting. Instead of pulling a raw web page, doc, or GitHub thread into context, these tools fetch, extract, rank, token-budget, and cache the evidence — preserving exact error strings, stack traces, and version-specific text — and keep the full source recoverable. SSRF-guarded (private/metadata/rebinding/redirect blocks), secret-redacted, fail-open (native `WebFetch`/`WebSearch` stay as fallback).
+ContextPilot fully integrates with [Caveman](https://caveman.so) for token optimization:
 
-- **`contextpilot_search`** — Open-web search → ranked result URLs + snippets (free SearXNG or Brave; falls back to native WebSearch). Feed the URLs to `contextpilot_research`.
-- **`contextpilot_fetch`** — Fetch one URL (web page, doc, or **PDF**); returns ranked, budget-capped evidence with stable `evidence_id`s; cache-first.
-- **`contextpilot_research`** — Research a question across several URLs (web/docs and GitHub issues/PRs via `gh`) in one call; merged, ranked, budgeted with per-source provenance.
-- **`contextpilot_expand`** — Recover an omitted section (or the full page, paged) by `evidence_id`, from cache, no network.
-- **`contextpilot_research_state`** — Routing adoption (gateway vs native), cache hit-rate, estimated tokens saved; shown on the dashboard's Research Gateway panel.
+| Component | What It Does |
+|-----------|-------------|
+| **Proxy** | Routes Claude requests through `http://127.0.0.1:8787/w/claude` for input compression |
+| **Stats reader** | Reads `~/.caveman/caveman.db` for optimization stats, compression ratios, cache intelligence |
+| **Learn sinks** | Surfaces Caveman's waste findings (reducible token sinks) in `contextpilot_optimize` |
+| **Pricing** | Uses Caveman's per-model pricing catalog for accurate cost estimates |
+| **Hooks** | Caveman hooks on all 10 lifecycle events; ContextPilot hooks complement (never conflict) |
+| **MCP tools** | `caveman_compress`, `caveman_retrieve`, `caveman_stats`, `caveman_toon_encode`, `caveman_toon_decode` |
 
-Adoption: `contextpilot setup --research` registers a non-blocking PreToolUse hint toward these tools (never blocks). `contextpilot setup --research --strict` additionally **denies** native `WebFetch`/`WebSearch` so Claude routes through the gateway (escape with `CONTEXTPILOT_ALLOW_NATIVE=1`). A usage skill installs to `~/.claude/skills/research/`. See [`docs/research-gateway-plan.md`](docs/research-gateway-plan.md).
+### Caveman Skills (installed with Caveman)
 
-### Free local search (SearXNG)
+| Skill | Description |
+|-------|-------------|
+| `caveman` | Terse caveman voice — answer first, fluff gone |
+| `caveman-commit` | Conventional Commits compressed to intent only |
+| `caveman-compress` | Compress memory files (CLAUDE.md, todos) to save tokens |
+| `caveman-discover` | Find and label LLM workflows for spend grouping |
+| `caveman-evidence-review` | Review Caveman Cloud evidence: cost, score, workflows |
+| `caveman-explore` | Read-only repo explorer for cold-start orientation |
+| `caveman-help` | Quick-reference for caveman skills and commands |
+| `caveman-learn` | Act on learn report — apply cost-lowering fixes |
+| `caveman-manage` | Inspect/manage Caveman Cloud experiments |
+| `caveman-optimize` | Turn optimization observations into evaluated candidates |
+| `caveman-review` | Compressed code review — one line per finding |
+| `caveman-setup` | Wire a repo through Caveman Cloud gateway |
+| `caveman-stats` | Show session token usage and mode attribution |
+| `cavecrew` | Delegate to investigator/builder/reviewer subagents |
+| `find-skills` | Discover and install additional agent skills |
 
-`./scripts/install.sh` already starts SearXNG and persists `CONTEXTPILOT_SEARXNG_URL` when Docker is present — nothing else to do. To manage it standalone:
+### ContextPilot Skills
+
+| Skill | Description |
+|-------|-------------|
+| `research` | Research gateway usage skill (auto-installed by setup) |
+| `hunt` | Bug hunting with evidence-ranked hypotheses |
+| `report` | Comprehensive optimization reporting |
+| `triage` | Issue triage and prioritization |
+
+## Hooks
+
+ContextPilot registers these hooks in `~/.claude/settings.local.json`:
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| Observer | SessionStart, PostToolUse, PostToolUseFailure, PreCompact, Stop, SessionEnd | Records events + token snapshots to telemetry DB |
+| Prompt advisor | UserPromptExpansion | Always injects conciseness directive; adds policy advice when triggered |
+| Compact advisor | PostCompact | Injects budget status after context compaction |
+| Research router | PreToolUse | Steers WebFetch/WebSearch to gateway (advisory or strict) |
+| Reread guard | PreToolUse | Warns on file re-reads; advises brevity when output >50K tokens |
+| Research advisor | PreToolUse | Suggests gateway tools for research-shaped requests |
+
+These complement Caveman's hooks (registered in `~/.claude/settings.json`) — no conflicts.
+
+## Research Gateway
+
+Reduces tokens spent on external research. Instead of pulling raw web pages into context, the gateway fetches, extracts, ranks, budgets, and caches evidence — preserving exact error strings, stack traces, and version-specific text.
+
+- **SSRF-safe**: private/metadata/rebinding/redirect guards
+- **PDF support**: via `unpdf` extraction
+- **Caching**: SQLite with TTL + content-hash dedup
+- **GitHub**: issues/PRs via `gh` CLI or API
+- **Search**: SearXNG (free, local) → Brave (free API key) → native WebSearch
+- **Fail-open**: native tools stay as fallback
+
+### Free Local Search (SearXNG)
 
 ```bash
-./scripts/searxng-up.sh      # start SearXNG on 127.0.0.1:8080 (JSON API on) + print the env var
-./scripts/searxng-down.sh    # stop it
+./scripts/searxng-up.sh      # start on 127.0.0.1:8080
+./scripts/searxng-down.sh    # stop
 ```
 
-Alternatively set `BRAVE_API_KEY` (free tier) to use Brave. With neither set, `contextpilot_search` returns a note to use native `WebSearch`.
+Or set `BRAVE_API_KEY` (free tier) for Brave search. With neither, falls back to native `WebSearch`.
 
 ## Architecture
 
 ```
 packages/
-  core/     — Detection, adapters, DB, schemas (Zod), paths, policy engine, benchmarks, research gateway
-  cli/      — Commander CLI (13 commands), formatters, hooks (observer + advisors incl. research), dashboard
-  mcp/      — MCP server (8 tools)
+  core/     — Detection, adapters, DB, schemas (Zod), paths, policy engine, research gateway
+  cli/      — Commander CLI (13 commands), formatters, hooks, dashboard, statusline
+  mcp/      — MCP server (9 tools)
 scripts/
-  install.sh — turnkey installer (prerequisites + build + setup)
-  searxng-up.sh / searxng-down.sh — free local SearXNG for contextpilot_search
-skills/
-  research/  — concise research-gateway usage skill
+  install.sh         — full-stack turnkey installer
+  searxng-up.sh      — start local SearXNG
+  searxng-down.sh    — stop local SearXNG
 ```
 
 - **Monorepo** managed with pnpm workspaces
 - **Build**: tsup (esbuild) — ESM only
 - **DB**: SQLite via better-sqlite3 at `~/.context-pilot/telemetry.db` (WAL mode)
-- **Test**: Vitest
+- **Test**: Vitest (161 tests)
 
 ## Development
 
@@ -155,6 +256,7 @@ pnpm test -- --watch  # Watch mode
 - **No stdout from observer hooks** — Caveman owns hook output on standard events
 - **Fail open** — if ContextPilot fails, Claude Code works normally
 - **No secrets in output** — credentials and tokens are redacted
+- **Hooks are additive** — ContextPilot hooks complement Caveman's, never conflict
 
 ## License
 

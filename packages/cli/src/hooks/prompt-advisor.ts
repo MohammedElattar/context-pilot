@@ -66,12 +66,17 @@ async function main(): Promise<void> {
     currentMode: config.mode,
   });
 
+  const CONCISE = 'Be concise. Short answers for simple questions. No filler, no preamble.';
+
   const results = evaluatePolicies(ctx);
   const triggered = results.filter(r => r.triggered);
-  if (triggered.length === 0) return;
+  if (triggered.length === 0) {
+    process.stdout.write(CONCISE);
+    return;
+  }
 
   const actions = getActionsForMode(config.mode, results);
-  const parts: string[] = [`ContextPilot [${config.mode}]: ${toolCount} tool calls`];
+  const parts: string[] = [CONCISE, `ContextPilot [${config.mode}]: ${toolCount} tool calls`];
   if (repeatedReads > 0) parts.push(`${repeatedReads} files re-read`);
 
   if (actions.length > 0) {
@@ -80,7 +85,7 @@ async function main(): Promise<void> {
     parts.push(triggered[0].action);
   }
 
-  process.stdout.write(parts.join('. ').slice(0, 295));
+  process.stdout.write(parts.join('. ').slice(0, 395));
 }
 
 main().catch(() => {});

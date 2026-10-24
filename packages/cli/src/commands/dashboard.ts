@@ -16,6 +16,7 @@ import {
   getSessionFileWrites,
   getCavemanTokenStats,
   getCavemanSessionStats,
+  getCavemanModeHistory,
   getSessionCost,
   getResearchSummary,
   resetTelemetry,
@@ -100,7 +101,11 @@ async function handleApi(path: string, method: string): Promise<unknown> {
         readCavemanConfig(),
         detectProxy(),
       ]);
-      return { history: history.slice(-100), config, proxy };
+      // Legacy JSONL may be absent; fall back to live DB query.
+      const effective = history.length > 0
+        ? history.slice(-100)
+        : getCavemanModeHistory(100);
+      return { history: effective, config, proxy };
     }
     case '/api/caveman-stats': {
       const stats = getCavemanTokenStats();
@@ -121,9 +126,7 @@ async function handleApi(path: string, method: string): Promise<unknown> {
       const cavemanConfig = await readCavemanConfig();
       const ctx = buildPolicyContext({
         cavemanEnabled: proxy.detected,
-        cavemanCompressingOutput: cavemanConfig !== null &&
-          Array.isArray((cavemanConfig as any).modules) &&
-          Object.values((cavemanConfig as any).modules || {}).includes(true),
+        cavemanCompressingOutput: cavemanConfig.modules?.output === true,
         currentMode: config.mode,
       });
       return { context: ctx, results: evaluatePolicies(ctx) };
@@ -555,6 +558,7 @@ body {
   <div class="panel-header"><span class="panel-title">Research Gateway</span><span class="panel-badge" id="research-badge">0 routed</span></div>
   <div id="research-container"><div class="empty-state">Loading...</div></div>
 </div>
+
 
 <div class="footer">ContextPilot v0.1.0 &middot; Local-first &middot; All data on your machine</div>
 

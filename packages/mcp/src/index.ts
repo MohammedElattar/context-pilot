@@ -14,6 +14,7 @@ import { handleResearchExpand } from './tools/research-expand.js';
 import { handleResearchState } from './tools/research-state.js';
 import { handleResearch } from './tools/research.js';
 import { handleResearchSearch } from './tools/research-search.js';
+import { handleHuntHealth } from './tools/hunt-health.js';
 
 const server = new Server(
   { name: 'contextpilot', version: '0.1.0' },
@@ -115,6 +116,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
+    {
+      name: 'contextpilot_hunt_health',
+      description: 'Hunt-session health check: repeated skill reads, recon output volume, research routing adoption, long tool stalls, and dedup discipline. Call this mid-hunt to detect token waste patterns.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          session_id: { type: 'string', description: 'Session ID (defaults to most recent).' },
+        },
+      },
+    },
   ],
 }));
 
@@ -147,6 +158,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'contextpilot_research_state':
         result = await handleResearchState(args as any ?? {});
+        break;
+      case 'contextpilot_hunt_health':
+        result = await handleHuntHealth(args as any ?? {});
         break;
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };

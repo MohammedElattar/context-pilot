@@ -59,8 +59,7 @@ async function currentContext(): Promise<{ ctx: PolicyContext; mode: string; cav
   }
 
   const cavemanEnabled = proxy.detected;
-  const cavemanCompressingOutput = cavemanConfig !== null && Array.isArray((cavemanConfig as any).modules) &&
-    (cavemanConfig as any).modules.includes('output');
+  const cavemanCompressingOutput = cavemanConfig.modules?.output === true;
 
   const ctx = buildPolicyContext({ sessionTurns, toolCallCount, repeatedFileReads, cavemanEnabled, cavemanCompressingOutput, currentMode: config.mode });
   return { ctx, mode: config.mode, cavemanEnabled, toolCallCount, sessionTurns };

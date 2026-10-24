@@ -12,6 +12,8 @@ import {
   insertEvent,
   insertFileRead,
   insertFileWrite,
+  insertTokenSnapshot,
+  getLatestCavemanRequest,
   closeDb,
 } from '@contextpilot/core';
 
@@ -46,6 +48,8 @@ function responseBytes(response: unknown): number | undefined {
   if (response == null) return undefined;
   return typeof response === 'string' ? response.length : JSON.stringify(response).length;
 }
+
+let lastRequestId: string | undefined;
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -122,6 +126,23 @@ async function main(): Promise<void> {
             }
           } catch { /* fail silently */ }
         }
+        // Record token snapshot from Caveman's per-request billing data.
+        try {
+          const req = getLatestCavemanRequest(`claude:${session_id}`);
+          if (req && req.request_id !== lastRequestId) {
+            lastRequestId = req.request_id;
+            insertTokenSnapshot({
+              session_id,
+              timestamp_ms: now,
+              input_tokens: req.input_tokens,
+              output_tokens: req.output_tokens,
+              cache_read_tokens: req.cached_input_tokens,
+              cache_write_tokens: req.cache_creation_input_tokens,
+              source: `caveman:${req.request_id}`,
+              usage_kind: 'billed',
+            });
+          }
+        } catch { /* fail silently */ }
         break;
 
       case 'PreCompact':

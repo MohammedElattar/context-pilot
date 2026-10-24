@@ -95,6 +95,18 @@ export async function runSetup(opts: { json?: boolean; research?: boolean; stric
       }
     }
 
+    // Status line — model, effort, 5h/weekly limits. Only set when the user has
+    // no status line of their own, so an existing one is never overwritten.
+    const statuslineCmd = `node ${resolve(projectRoot, 'packages', 'cli', 'dist', 'statusline', 'statusline.js')}`;
+    if (!settings.statusLine) {
+      settings.statusLine = { type: 'command', command: statuslineCmd };
+      results.messages.push('Status line registered (model, effort, 5h/weekly limits).');
+    } else if (String(settings.statusLine.command ?? '').includes('statusline')) {
+      settings.statusLine = { type: 'command', command: statuslineCmd };
+    } else {
+      results.messages.push('Existing status line kept; ContextPilot status line not installed.');
+    }
+
     // UserPromptExpansion — prompt advisor (safe: Caveman not hooked)
     const upeExisting = settings.hooks['UserPromptExpansion'] ?? [];
     const upeRegistered = upeExisting.some((g: any) =>
@@ -111,6 +123,18 @@ export async function runSetup(opts: { json?: boolean; research?: boolean; stric
     );
     if (!pcRegistered) {
       settings.hooks['PostCompact'] = [...pcExisting, ...hookEntry(compactCmd, 3)];
+    }
+
+    // PreToolUse — re-read guard. NON-BLOCKING: only adds additionalContext.
+    {
+      const rereadCmd = `node ${resolve(hookBase, 'reread-guard.js')}`;
+      const ptuExisting = settings.hooks['PreToolUse'] ?? [];
+      const rereadRegistered = ptuExisting.some((g: any) =>
+        g.hooks?.some((h: any) => h.command?.includes('reread-guard'))
+      );
+      if (!rereadRegistered) {
+        settings.hooks['PreToolUse'] = [...ptuExisting, ...hookEntry(rereadCmd, 3)];
+      }
     }
 
     // PreToolUse — research advisor (opt-in via --research). NON-BLOCKING:

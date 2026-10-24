@@ -7,6 +7,14 @@ export type PolicyActionType =
   | 'enable-module'
   | 'reduce-reads';
 
+export interface HuntContext {
+  reconBytesInContext: number;
+  huntSkillsLoaded: string[];
+  dedupCheckRun: boolean;
+  reportDraftStarted: boolean;
+  brainLastAccessMs: number | null;
+}
+
 export interface PolicyContext {
   contextWindowUsedPercent: number | null;
   cacheReadRatio: number | null;
@@ -16,6 +24,7 @@ export interface PolicyContext {
   cavemanEnabled: boolean;
   cavemanCompressingOutput: boolean;
   currentMode: string;
+  huntContext?: HuntContext;
 }
 
 export interface PolicyResult {

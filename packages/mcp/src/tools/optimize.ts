@@ -8,6 +8,8 @@ import {
   getRepeatedFileReadCount,
   analyzeFileReads,
   computeContextHealth,
+  getCavemanLearnSinks,
+  getInputOptimizationStats,
   type ContextHealth,
 } from '@contextpilot/core';
 
@@ -78,6 +80,15 @@ export async function handleOptimize(args: { session_id?: string }) {
     actions.push(`Context health ${health.score}/100 (confidence ${(health.confidence * 100).toFixed(0)}%). Weakest: ${worst.join(', ') || 'n/a'}.`);
   }
 
+  // Surface Caveman's evidence-backed waste findings.
+  const sinks = getCavemanLearnSinks();
+  const actionableSinks = sinks.filter(s => s.class === 'reducible' || s.tokens_per_turn > 100);
+  for (const sink of actionableSinks) {
+    actions.push(`[${sink.sink_id}] ${sink.title} — ${sink.suggestion}`);
+  }
+
+  const inputOptimization = getInputOptimizationStats();
+
   if (toolCallCount > 50) {
     actions.push(`${toolCallCount} tool calls this session. Consider using /compact or splitting into smaller tasks.`);
   }
@@ -95,6 +106,17 @@ export async function handleOptimize(args: { session_id?: string }) {
     repeated_file_reads: repeatedReads,
     context_health: health ? { score: health.score, confidence: health.confidence, missing_data: health.missing_data } : null,
     read_recommendations: readRecommendations,
+    input_optimization: inputOptimization ? {
+      optimized_requests: inputOptimization.optimizedRequests,
+      tokens_saved: inputOptimization.tokensSaved,
+      savings_ratio: inputOptimization.savingsRatio,
+    } : null,
+    waste_findings: actionableSinks.map(s => ({
+      sink_id: s.sink_id,
+      title: s.title,
+      class: s.class,
+      tokens_per_turn: s.tokens_per_turn,
+    })),
     optimization_actions: actions,
     action_count: actions.length,
   };

@@ -16,8 +16,24 @@ export { paths } from './config/paths.js';
 export {
   getCavemanTokenStats,
   getCavemanSessionStats,
+  getCavemanModeHistory,
+  getLatestCavemanRequest,
+  getCavemanLearnSinks,
+  getInputOptimizationStats,
   type CavemanTokenStats,
   type CavemanSessionStats,
+  type CavemanModeHistoryEntry,
+  type CavemanLatestRequest,
+  type CavemanLearnSink,
+  type InputOptimizationStats,
+  getInputOptimizationTimeline,
+  getCompressionStats,
+  getCacheIntelligence,
+  type InputOptimizationTimelineEntry,
+  type CompressionStats,
+  type CacheIntelligence,
+  getCavemanPricing,
+  type CavemanModelPricing,
 } from './adapters/caveman/stats-reader.js';
 export { detectAllTools, type DetectedTool } from './adapters/registry.js';
 export type { OptimizerAdapter, Capability, AdapterStatus, HealthResult, ConflictDeclaration } from './adapters/types.js';
@@ -41,7 +57,7 @@ export type {
 
 export { evaluatePolicies, evaluateAllPolicies, getTriggeredPolicies, buildPolicyContext, getActionsForMode } from './policy/engine.js';
 export type { ModeAction } from './policy/engine.js';
-export type { Policy, PolicyContext, PolicyResult, PolicySeverity, PolicyActionType } from './policy/types.js';
+export type { Policy, PolicyContext, PolicyResult, PolicySeverity, PolicyActionType, HuntContext } from './policy/types.js';
 export { ALL_POLICIES } from './policy/policies.js';
 export {
   compileDeclarativePolicy,
@@ -56,6 +72,7 @@ export {
   getSessionCost,
   estimateCost,
   getModelPricing,
+  getModelPricingWithCaveman,
   PRICING,
   type SessionCost,
   type BilledCost,

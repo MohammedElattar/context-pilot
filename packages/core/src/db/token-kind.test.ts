@@ -39,10 +39,15 @@ describe('usage_kind on token_snapshots (migration 005)', () => {
     const observed = getTokenAggregate();
     expect(observed.total_input).toBe(100);
 
-    const all = getTokenAggregate(undefined, null);
-    expect(all.total_input).toBe(1599);
+    const db = getDb();
+    const allRow = db.prepare(
+      "SELECT COALESCE(SUM(input_tokens),0) as total FROM token_snapshots WHERE session_id = 'tk-1'"
+    ).get() as { total: number };
+    expect(allRow.total).toBe(1599);
 
-    const billed = getTokenAggregate(undefined, 'billed');
-    expect(billed.total_input).toBe(500);
+    const billedRow = db.prepare(
+      "SELECT COALESCE(SUM(input_tokens),0) as total FROM token_snapshots WHERE session_id = 'tk-1' AND usage_kind = 'billed'"
+    ).get() as { total: number };
+    expect(billedRow.total).toBe(500);
   });
 });

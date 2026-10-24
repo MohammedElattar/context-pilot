@@ -207,8 +207,24 @@ function runMigrations(database: Database.Database): void {
     );
   `);
 
-  // Idempotent column adds (see MIGRATION_004) — run before the index migration
-  // so the unique index on event_id always has its column to build on.
+  const applied = new Set(
+    database.prepare('SELECT name FROM _migrations').all()
+      .map((row: any) => row.name as string)
+  );
+
+  const applyMigration = (name: string, sql: string) => {
+    if (applied.has(name)) return;
+    database.exec(sql);
+    database.prepare('INSERT INTO _migrations (name, applied_at) VALUES (?, ?)').run(name, Date.now());
+  };
+
+  // Phase 1: create base tables.
+  applyMigration('001-init', MIGRATION_001);
+  applyMigration('002-file-reads', MIGRATION_002);
+  applyMigration('003-file-writes', MIGRATION_003);
+
+  // Phase 2: idempotent column adds — tables must exist first, and later
+  // migrations (004+) depend on these columns.
   ensureColumn(database, 'events', 'event_id', 'TEXT');
   ensureColumn(database, 'events', 'source', 'TEXT');
   ensureColumn(database, 'events', 'confidence', 'REAL');
@@ -216,31 +232,12 @@ function runMigrations(database: Database.Database): void {
   ensureColumn(database, 'file_reads', 'is_partial', 'INTEGER');
   ensureColumn(database, 'file_reads', 'fingerprint', 'TEXT');
 
-  const applied = new Set(
-    database.prepare('SELECT name FROM _migrations').all()
-      .map((row: any) => row.name as string)
-  );
-
-  const migrations = [
-    { name: '001-init', sql: MIGRATION_001 },
-    { name: '002-file-reads', sql: MIGRATION_002 },
-    { name: '003-file-writes', sql: MIGRATION_003 },
-    { name: '004-event-provenance', sql: MIGRATION_004 },
-    { name: '005-token-kind', sql: MIGRATION_005 },
-    { name: '006-benchmark-runs', sql: MIGRATION_006 },
-    { name: '007-research-cache', sql: MIGRATION_007 },
-    { name: '008-research-ledger', sql: MIGRATION_008 },
-  ];
-
-  for (const migration of migrations) {
-    if (applied.has(migration.name)) continue;
-
-    database.exec(migration.sql);
-    database.prepare('INSERT INTO _migrations (name, applied_at) VALUES (?, ?)').run(
-      migration.name,
-      Date.now()
-    );
-  }
+  // Phase 3: migrations that depend on the columns above.
+  applyMigration('004-event-provenance', MIGRATION_004);
+  applyMigration('005-token-kind', MIGRATION_005);
+  applyMigration('006-benchmark-runs', MIGRATION_006);
+  applyMigration('007-research-cache', MIGRATION_007);
+  applyMigration('008-research-ledger', MIGRATION_008);
 }
 
 export function closeDb(): void {

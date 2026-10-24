@@ -18,8 +18,8 @@ export {
   type ResearchLedgerEntry, type ResearchSummary,
 } from './ledger.js';
 export {
-  parseGitHubRef, fetchGitHubMarkdown, realGhExec,
-  type GitHubRef, type GhExec,
+  parseGitHubRef, parseGhsaRef, fetchGitHubMarkdown, fetchGhsaMarkdown, realGhExec,
+  type GitHubRef, type GhsaRef, type GhExec,
 } from './github.js';
 export {
   researchQuery,

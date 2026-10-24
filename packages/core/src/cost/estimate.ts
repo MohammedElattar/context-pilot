@@ -1,4 +1,4 @@
-import { getModelPricing, PRICING, type PricingTable } from './pricing.js';
+import { getModelPricing, PRICING, type PricingTable, type ModelPricing } from './pricing.js';
 
 export interface TokenCounts {
   input?: number | null;
@@ -45,8 +45,9 @@ export function estimateCost(
   tokens: TokenCounts,
   modelId: string | null | undefined,
   table?: PricingTable,
+  overridePricing?: ModelPricing,
 ): CostEstimate | null {
-  const pricing = getModelPricing(modelId, table);
+  const pricing = overridePricing ?? getModelPricing(modelId, table);
   if (!pricing || !modelId) return null;
 
   const input = Math.max(0, tokens.input ?? 0);

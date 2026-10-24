@@ -55,6 +55,7 @@ export function buildPolicyContext(options: {
   cavemanEnabled?: boolean;
   cavemanCompressingOutput?: boolean;
   currentMode?: string;
+  huntContext?: PolicyContext['huntContext'];
 }): PolicyContext {
   return {
     contextWindowUsedPercent: options.contextWindowUsedPercent ?? null,
@@ -65,5 +66,6 @@ export function buildPolicyContext(options: {
     cavemanEnabled: options.cavemanEnabled ?? false,
     cavemanCompressingOutput: options.cavemanCompressingOutput ?? false,
     currentMode: options.currentMode ?? 'observe',
+    huntContext: options.huntContext,
   };
 }

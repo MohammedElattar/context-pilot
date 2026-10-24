@@ -1,9 +1,9 @@
 import type Database from 'better-sqlite3';
 import { getDb } from '../db/connection.js';
-import { getCavemanSessionStats } from '../adapters/caveman/stats-reader.js';
+import { getCavemanSessionStats, getCavemanPricing } from '../adapters/caveman/stats-reader.js';
 import { estimateCost, type CostEstimate } from './estimate.js';
 
-export { PRICING, getModelPricing, type ModelPricing, type PricingTable } from './pricing.js';
+export { PRICING, getModelPricing, getModelPricingWithCaveman, type ModelPricing, type PricingTable } from './pricing.js';
 export { estimateCost, type CostEstimate, type TokenCounts } from './estimate.js';
 
 export interface BilledCost {
@@ -51,9 +51,12 @@ export function getSessionCost(sessionId: string, db?: Database.Database): Sessi
       };
 
     if (row.snapshots > 0) {
+      const cavemanPrices = base.model ? getCavemanPricing(base.model) ?? undefined : undefined;
       base.estimated = estimateCost(
         { input: row.input, output: row.output, cacheRead: row.cacheRead, cacheWrite: row.cacheWrite },
         base.model,
+        undefined,
+        cavemanPrices,
       );
     }
   } catch {

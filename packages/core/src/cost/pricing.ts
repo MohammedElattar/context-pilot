@@ -69,3 +69,22 @@ export function getModelPricing(
   }
   return best?.pricing;
 }
+
+/**
+ * Like getModelPricing, but tries Caveman's per-request pricing first.
+ * Import getCavemanPricing separately to avoid circular deps in pricing.ts.
+ */
+export function getModelPricingWithCaveman(
+  modelId: string | null | undefined,
+  cavemanPricingFn: (id: string) => ModelPricing | null,
+  table: PricingTable = PRICING,
+): ModelPricing | undefined {
+  if (!modelId) return undefined;
+
+  try {
+    const caveman = cavemanPricingFn(modelId);
+    if (caveman) return caveman;
+  } catch { /* fall through */ }
+
+  return getModelPricing(modelId, table);
+}

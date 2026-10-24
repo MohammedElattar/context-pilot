@@ -88,9 +88,7 @@ export async function handleBudget(args: { session_id?: string }) {
     toolCallCount: stats.tool_call_count,
     repeatedFileReads: stats.files_read_multiple_times,
     cavemanEnabled: proxy.detected,
-    cavemanCompressingOutput: cavemanConfig !== null &&
-      typeof (cavemanConfig as any).modules === 'object' &&
-      (cavemanConfig as any).modules?.output === true,
+    cavemanCompressingOutput: cavemanConfig.modules?.output === true,
     currentMode: config.mode,
   });
 

@@ -199,7 +199,7 @@ fi
 say "5/8  Docker (for local SearXNG search)"
 HAS_DOCKER=0
 if [ "$DO_DOCKER" -eq 1 ]; then
-  if docker compose version >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1 || podman compose version >/dev/null 2>&1; then
+  if docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1 || podman compose version >/dev/null 2>&1; then
     ok "Docker/Podman found"
     HAS_DOCKER=1
   else

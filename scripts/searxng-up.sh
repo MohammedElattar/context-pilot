@@ -19,8 +19,10 @@ URL="http://127.0.0.1:$SEARXNG_PORT"
 die() { printf '\033[31merror: %s\033[0m\n' "$1" >&2; exit 1; }
 
 # Compose command: prefer `docker compose`, then `docker-compose`, then podman.
+# Each candidate is tested with `version` to catch broken symlinks (e.g. Docker
+# Desktop not running on WSL where the binary points to /mnt/wsl/...).
 if docker compose version >/dev/null 2>&1; then COMPOSE="docker compose";
-elif command -v docker-compose >/dev/null 2>&1; then COMPOSE="docker-compose";
+elif docker-compose version >/dev/null 2>&1; then COMPOSE="docker-compose";
 elif podman compose version >/dev/null 2>&1; then COMPOSE="podman compose";
 else
   die "Docker (or Podman) is required. Install Docker Desktop / Docker Engine (https://docs.docker.com/get-docker/), then re-run. Manual fallback:
